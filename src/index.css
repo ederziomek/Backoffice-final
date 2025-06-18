@@ -1,0 +1,65 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+@layer base {
+  :root {
+    --radius: 0.5rem
+  ;
+    --sidebar-background: 0 0% 98%;
+    --sidebar-foreground: 240 5.3% 26.1%;
+    --sidebar-primary: 240 5.9% 10%;
+    --sidebar-primary-foreground: 0 0% 98%;
+    --sidebar-accent: 240 4.8% 95.9%;
+    --sidebar-accent-foreground: 240 5.9% 10%;
+    --sidebar-border: 220 13% 91%;
+    --sidebar-ring: 217.2 91.2% 59.8%}
+  .dark {
+    --sidebar-background: 240 5.9% 10%;
+    --sidebar-foreground: 240 4.8% 95.9%;
+    --sidebar-primary: 224.3 76.3% 48%;
+    --sidebar-primary-foreground: 0 0% 100%;
+    --sidebar-accent: 240 3.7% 15.9%;
+    --sidebar-accent-foreground: 240 4.8% 95.9%;
+    --sidebar-border: 240 3.7% 15.9%;
+    --sidebar-ring: 217.2 91.2% 59.8%
+  }
+}
+
+
+/* Estilos globais para o menu responsivo */
+.sidebar {
+  transition: transform 0.3s ease-in-out;
+}
+
+/* Em dispositivos móveis, o sidebar fica oculto por padrão */
+@media (max-width: 767px) {
+  .sidebar {
+    transform: translateX(-100%);
+  }
+  
+  .sidebar-visible {
+    transform: translateX(0);
+  }
+  
+  /* Prevenir scroll do body quando o menu está aberto */
+  body.sidebar-open {
+    overflow: hidden;
+  }
+  
+  /* Ajustar o conteúdo principal para não ter margem em mobile */
+  .main-content {
+    margin-left: 0 !important;
+  }
+}
+
+/* Em desktop, o sidebar fica sempre visível */
+@media (min-width: 768px) {
+  .sidebar {
+    transform: translateX(0);
+  }
+  
+  /* Ajustar o conteúdo principal para ter margem em desktop */
+  .main-content {
+    margin-left: 16rem !important; /* 64 * 0.25 = 16rem */
+  }
+}
