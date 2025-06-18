@@ -10,8 +10,7 @@ import {
   Activity,
   Database,
   AlertCircle,
-  CheckCircle,
-  RefreshCw
+  CheckCircle
 } from 'lucide-react';
 import { realDataService, DashboardStats, AtividadeRecente } from '@/services/realDataService';
 

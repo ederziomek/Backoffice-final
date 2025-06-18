@@ -264,7 +264,7 @@ const RealUsersTable: React.FC = () => {
                 </tr>
               </thead>
               <tbody>
-                {usuarios.map((usuario, index) => (
+                {usuarios.map((usuario) => (
                   <tr key={usuario.user_id} className="border-b border-cinza-medio hover:bg-cinza-medio/50">
                     <td className="py-3 px-4 text-branco font-medium">{usuario.user_id}</td>
                     <td className="py-3 px-4 text-gray-300">{formatDate(usuario.register_date)}</td>
