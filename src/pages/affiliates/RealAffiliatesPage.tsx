@@ -1,23 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { Users, Network, TrendingUp, Activity } from 'lucide-react';
-
-interface Affiliate {
-  affiliate_id: number;
-  total_clients: number;
-  min_level: number;
-  max_level: number;
-  status: string;
-}
-
-interface AffiliateStats {
-  total_affiliates: number;
-  total_tracking_records: number;
-  level_distribution: Record<string, number>;
-  top_affiliates: Array<{
-    affiliate_id: number;
-    client_count: number;
-  }>;
-}
+import { affiliatesService, Affiliate, AffiliateStats } from '@/services/affiliatesService';
 
 const RealAffiliatesPage: React.FC = () => {
   const [affiliates, setAffiliates] = useState<Affiliate[]>([]);
@@ -31,18 +14,18 @@ const RealAffiliatesPage: React.FC = () => {
   const fetchAffiliates = async (page: number = 1) => {
     try {
       setLoading(true);
-      const response = await fetch(`http://localhost:5001/api/affiliates?page=${page}&limit=${limit}`);
-      const data = await response.json();
+      setError(null);
+      const response = await affiliatesService.getAffiliates(page, limit);
       
-      if (data.status === 'success') {
-        setAffiliates(data.data);
-        setTotalPages(data.pagination.pages);
-        setCurrentPage(data.pagination.page);
+      if (response.status === 'success') {
+        setAffiliates(response.data);
+        setTotalPages(response.pagination.pages);
+        setCurrentPage(response.pagination.page);
       } else {
-        setError(data.message || 'Erro ao carregar afiliados');
+        setError(response.message || 'Erro ao carregar afiliados');
       }
     } catch (err) {
-      setError('Erro de conexão com o servidor');
+      setError(err instanceof Error ? err.message : 'Erro de conexão com o servidor');
     } finally {
       setLoading(false);
     }
@@ -50,18 +33,28 @@ const RealAffiliatesPage: React.FC = () => {
 
   const fetchStats = async () => {
     try {
-      const response = await fetch('http://localhost:5001/api/affiliates/stats');
-      const data = await response.json();
+      const response = await affiliatesService.getStats();
       
-      if (data.status === 'success') {
-        setStats(data.stats);
+      if (response.status === 'success') {
+        setStats(response.stats);
       }
     } catch (err) {
       console.error('Erro ao carregar estatísticas:', err);
     }
   };
 
+  const testConnection = async () => {
+    try {
+      await affiliatesService.testConnection();
+      console.log('✅ Conexão com API funcionando');
+    } catch (err) {
+      console.error('❌ Erro na conexão com API:', err);
+      setError('Erro de conexão com o servidor');
+    }
+  };
+
   useEffect(() => {
+    testConnection();
     fetchAffiliates(1);
     fetchStats();
   }, []);
