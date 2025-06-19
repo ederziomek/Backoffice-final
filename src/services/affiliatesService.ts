@@ -1,15 +1,15 @@
 // Serviço para conexão com banco PostgreSQL e APIs de afiliados
 import axios from 'axios';
 
-// Configuração da API base - usando serviços existentes
+// Configuração da API base - usando proxy em produção
 const API_BASE_URL = process.env.NODE_ENV === 'production' 
-  ? 'https://fature-real-data-service-production.up.railway.app'
+  ? 'https://fature-api-proxy-production.up.railway.app/proxy/external-data'
   : 'http://localhost:5000';
 
 // Configuração do axios
 const api = axios.create({
   baseURL: API_BASE_URL,
-  timeout: 30000,
+  timeout: 180000, // 3 minutos para aguardar consultas lentas
   headers: {
     'Content-Type': 'application/json',
   },

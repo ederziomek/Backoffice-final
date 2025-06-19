@@ -1,13 +1,15 @@
 // Serviço para integração com dados reais da operação
 import axios from 'axios';
 
-// URL do serviço de dados reais
-const DATA_SERVICE_URL = 'http://localhost:5001';
+// URL do serviço de dados reais - usando proxy em produção
+const DATA_SERVICE_URL = process.env.NODE_ENV === 'production'
+  ? 'https://fature-api-proxy-production.up.railway.app/proxy/external-data'
+  : 'http://localhost:5001';
 
 // Configuração do axios
 const api = axios.create({
   baseURL: DATA_SERVICE_URL,
-  timeout: 30000,
+  timeout: 180000, // 3 minutos para aguardar consultas lentas
   headers: {
     'Content-Type': 'application/json',
   },
