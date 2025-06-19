@@ -1,7 +1,7 @@
 // Serviço para conexão com banco PostgreSQL e APIs de afiliados
 import axios from 'axios';
 
-// Configuração da API base - usando proxy em produção
+// Configuração da API base - usando proxy em produção (v2)
 const API_BASE_URL = process.env.NODE_ENV === 'production' 
   ? 'https://fature-api-proxy-production.up.railway.app/proxy/external-data'
   : 'http://localhost:5000';
