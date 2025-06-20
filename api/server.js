@@ -1,11 +1,15 @@
 const express = require('express');
 const { Pool } = require('pg');
 const cors = require('cors');
+const path = require('path');
 const app = express();
 
 // Middleware
 app.use(cors());
 app.use(express.json());
+
+// Servir arquivos estáticos do frontend React
+app.use(express.static(path.join(__dirname, '../dist')));
 
 // Configuração do banco PostgreSQL
 const pool = new Pool({
@@ -259,6 +263,11 @@ app.get('/api/affiliates/:id/network', async (req, res) => {
       error: error.message
     });
   }
+});
+
+// Fallback para React Router - deve vir DEPOIS das rotas da API
+app.get('*', (req, res) => {
+  res.sendFile(path.join(__dirname, '../dist/index.html'));
 });
 
 // Middleware de tratamento de erros
