@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { Users, Network, RefreshCw } from 'lucide-react';
+import { Users, Network, RefreshCw, AlertCircle } from 'lucide-react';
 import { affiliatesService } from '@/services/affiliatesService';
 
 interface MLMAffiliate {
@@ -10,13 +10,20 @@ interface MLMAffiliate {
   n3: number;
   n4: number;
   n5: number;
-  name?: string;
-  last_calculated?: string;
+}
+
+interface AffiliateStats {
+  total_affiliates: number;
+  total_tracking_records: number;
+  top_affiliates: Array<{
+    affiliate_id: number;
+    client_count: number;
+  }>;
 }
 
 interface MLMResponse {
   status: string;
-  data: any[]; // Usar any para flexibilidade
+  data: MLMAffiliate[];
   pagination: {
     page: number;
     pages: number;
@@ -27,6 +34,7 @@ interface MLMResponse {
 
 const RealAffiliatesPage: React.FC = () => {
   const [affiliates, setAffiliates] = useState<MLMAffiliate[]>([]);
+  const [stats, setStats] = useState<AffiliateStats | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [currentPage, setCurrentPage] = useState(1);
@@ -46,29 +54,33 @@ const RealAffiliatesPage: React.FC = () => {
       console.log('📊 Dados MLM recebidos:', response);
       
       if (response.status === 'success') {
-        // Mapear dados do microserviço para o formato esperado
-        const mappedData = response.data.map(item => ({
-          affiliate_id: item.affiliate_id,
-          total: item.total_network,
-          n1: item.n1_count,
-          n2: item.n2_count,
-          n3: item.n3_count,
-          n4: item.n4_count,
-          n5: item.n5_count,
-          name: item.name,
-          last_calculated: item.last_calculated
-        }));
-        
-        setAffiliates(mappedData);
+        setAffiliates(response.data);
         setTotalPages(response.pagination?.pages || 1);
         setCurrentPage(response.pagination?.page || 1);
         setTotalAffiliates(response.pagination?.total || 0);
       }
     } catch (err) {
       console.error('❌ Erro ao buscar afiliados MLM:', err);
-      setError(err instanceof Error ? err.message : 'Erro de conexão com o servidor');
+      setError(err instanceof Error ? err.message : 'Falha ao carregar estatísticas MLM');
     } finally {
       setLoading(false);
+    }
+  };
+
+  const fetchStats = async () => {
+    try {
+      console.log('📈 Buscando estatísticas...');
+      
+      const response = await affiliatesService.getAffiliateStats();
+      
+      console.log('📊 Estatísticas recebidas:', response);
+      
+      if (response.status === 'success') {
+        setStats(response.stats);
+      }
+    } catch (err) {
+      console.error('❌ Erro ao buscar estatísticas:', err);
+      // Não definir erro aqui para não sobrescrever o erro principal
     }
   };
 
@@ -84,8 +96,15 @@ const RealAffiliatesPage: React.FC = () => {
   };
 
   useEffect(() => {
-    testConnection();
-    fetchMLMAffiliates(1);
+    const loadData = async () => {
+      await testConnection();
+      await Promise.all([
+        fetchMLMAffiliates(1),
+        fetchStats()
+      ]);
+    };
+    
+    loadData();
   }, []);
 
   const handlePageChange = (page: number) => {
@@ -94,8 +113,11 @@ const RealAffiliatesPage: React.FC = () => {
     }
   };
 
-  const handleRefresh = () => {
-    fetchMLMAffiliates(currentPage);
+  const handleRefresh = async () => {
+    await Promise.all([
+      fetchMLMAffiliates(currentPage),
+      fetchStats()
+    ]);
   };
 
   if (loading) {
@@ -140,7 +162,9 @@ const RealAffiliatesPage: React.FC = () => {
             <div className="flex items-center justify-between">
               <div>
                 <p className="text-gray-400 text-sm">Afiliados únicos</p>
-                <p className="text-2xl font-bold text-white">{totalAffiliates.toLocaleString()}</p>
+                <p className="text-2xl font-bold text-white">
+                  {stats ? stats.total_affiliates.toLocaleString() : totalAffiliates.toLocaleString()}
+                </p>
                 <p className="text-xs text-gray-500">Total de afiliados com rede</p>
               </div>
               <Users className="w-8 h-8 text-cyan-400" />
@@ -152,7 +176,8 @@ const RealAffiliatesPage: React.FC = () => {
               <div>
                 <p className="text-gray-400 text-sm">Quantidade de indicações</p>
                 <p className="text-2xl font-bold text-white">
-                  {affiliates.reduce((total, affiliate) => total + affiliate.total, 0).toLocaleString()}
+                  {stats ? stats.total_tracking_records.toLocaleString() : 
+                   affiliates.reduce((total, affiliate) => total + affiliate.total, 0).toLocaleString()}
                 </p>
                 <p className="text-xs text-gray-500">Total em todos os níveis</p>
               </div>
@@ -164,7 +189,10 @@ const RealAffiliatesPage: React.FC = () => {
         {/* Error Message */}
         {error && (
           <div className="bg-red-900/50 border border-red-500 rounded-lg p-4 mb-6">
-            <p className="text-red-200">{error}</p>
+            <div className="flex items-center gap-2">
+              <AlertCircle className="w-5 h-5 text-red-400" />
+              <p className="text-red-200">{error}</p>
+            </div>
           </div>
         )}
 

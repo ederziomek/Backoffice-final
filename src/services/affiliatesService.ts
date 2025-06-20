@@ -1,9 +1,9 @@
 import axios from 'axios';
 
-// Configuração da API - usando microserviço de afiliados
+// Configuração da API - usando API local do backoffice
 const API_BASE_URL = process.env.NODE_ENV === 'production' 
-  ? 'https://fature-affiliate-service-production.up.railway.app/api/v1'  // Microserviço de afiliados
-  : 'https://fature-affiliate-service-production.up.railway.app/api/v1';
+  ? '/api'  // API local do backoffice em produção
+  : '/api'; // API local do backoffice em desenvolvimento
 
 // Configuração do axios
 const api = axios.create({
@@ -25,27 +25,31 @@ api.interceptors.response.use(
 
 // Interfaces para dados reais
 export interface Affiliate {
-  id: number;
-  external_id: number;
-  name?: string;
-  email?: string;
-  status: string;
+  affiliate_id: number;
   total_clients: number;
-  total_commission: number;
-  created_at: string;
+  min_level: number;
+  max_level: number;
+  status: string;
+  total_records: number;
 }
 
-export interface MLMStats {
+export interface MLMAffiliate {
   affiliate_id: number;
-  name?: string;
-  total_network: number;
-  n1_count: number;
-  n2_count: number;
-  n3_count: number;
-  n4_count: number;
-  n5_count: number;
-  total_commission: number;
-  last_calculated: string;
+  total: number;
+  n1: number;
+  n2: number;
+  n3: number;
+  n4: number;
+  n5: number;
+}
+
+export interface AffiliateStats {
+  total_affiliates: number;
+  total_tracking_records: number;
+  top_affiliates: Array<{
+    affiliate_id: number;
+    client_count: number;
+  }>;
 }
 
 export interface AffiliatesResponse {
@@ -59,9 +63,9 @@ export interface AffiliatesResponse {
   };
 }
 
-export interface MLMStatsResponse {
+export interface MLMResponse {
   status: string;
-  data: MLMStats[];
+  data: MLMAffiliate[];
   pagination: {
     page: number;
     pages: number;
@@ -70,15 +74,20 @@ export interface MLMStatsResponse {
   };
 }
 
+export interface StatsResponse {
+  status: string;
+  stats: AffiliateStats;
+}
+
 class AffiliatesService {
-  // Buscar afiliados do microserviço
+  // Buscar afiliados da API local
   async getAffiliates(page: number = 1, per_page: number = 20): Promise<AffiliatesResponse> {
     try {
-      console.log(`🔍 Buscando afiliados do microserviço - Página: ${page}, Por página: ${per_page}`);
+      console.log(`🔍 Buscando afiliados da API local - Página: ${page}, Por página: ${per_page}`);
       
       const response = await api.get(`/affiliates?page=${page}&limit=${per_page}`);
       
-      console.log('📊 Resposta do microserviço de afiliados:', response.data);
+      console.log('📊 Resposta da API local de afiliados:', response.data);
       
       return {
         status: response.data.status,
@@ -92,50 +101,55 @@ class AffiliatesService {
       };
 
     } catch (error) {
-      console.error('❌ Erro ao buscar afiliados do microserviço:', error);
+      console.error('❌ Erro ao buscar afiliados da API local:', error);
       throw new Error('Falha ao carregar dados dos afiliados');
     }
   }
 
-  // Buscar estatísticas MLM do microserviço
-  async getAffiliateStats(): Promise<any> {
+  // Buscar estatísticas de afiliados da API local
+  async getAffiliateStats(): Promise<StatsResponse> {
     try {
-      console.log('📈 Buscando estatísticas MLM do microserviço');
+      console.log('📈 Buscando estatísticas de afiliados da API local');
       
-      const response = await api.get('/mlm/stats?page=1&limit=1');
+      const response = await api.get('/affiliates/stats');
       
-      console.log('📊 Estatísticas MLM:', response.data);
-      
-      return {
-        status: response.data.status,
-        data: response.data.data,
-        pagination: response.data.pagination
-      };
-
-    } catch (error) {
-      console.error('❌ Erro ao buscar estatísticas MLM:', error);
-      throw new Error('Falha ao carregar estatísticas MLM');
-    }
-  }
-
-  // Alias para compatibilidade
-  async getStats(): Promise<any> {
-    return this.getAffiliateStats();
-  }
-
-  // Buscar dados MLM com níveis detalhados
-  async getAffiliatesMLMLevels(page: number = 1, per_page: number = 20): Promise<MLMStatsResponse> {
-    try {
-      console.log(`🔍 Buscando estatísticas MLM - Página: ${page}, Por página: ${per_page}`);
-      
-      const response = await api.get(`/mlm/stats?page=${page}&limit=${per_page}`);
-      
-      console.log('📊 Resposta das estatísticas MLM:', response.data);
+      console.log('📊 Estatísticas de afiliados:', response.data);
       
       return response.data;
 
     } catch (error) {
-      console.error('❌ Erro ao buscar estatísticas MLM:', error);
+      console.error('❌ Erro ao buscar estatísticas de afiliados:', error);
+      throw new Error('Falha ao carregar estatísticas de afiliados');
+    }
+  }
+
+  // Alias para compatibilidade
+  async getStats(): Promise<StatsResponse> {
+    return this.getAffiliateStats();
+  }
+
+  // Buscar dados MLM com níveis detalhados da API local
+  async getAffiliatesMLMLevels(page: number = 1, per_page: number = 20): Promise<MLMResponse> {
+    try {
+      console.log(`🔍 Buscando afiliados MLM da API local - Página: ${page}, Por página: ${per_page}`);
+      
+      const response = await api.get(`/affiliates/mlm-levels?page=${page}&limit=${per_page}`);
+      
+      console.log('📊 Resposta dos afiliados MLM:', response.data);
+      
+      return {
+        status: response.data.status,
+        data: response.data.data || [],
+        pagination: response.data.pagination || {
+          page: 1,
+          pages: 1,
+          total: 0,
+          limit: per_page
+        }
+      };
+
+    } catch (error) {
+      console.error('❌ Erro ao buscar afiliados MLM:', error);
       throw new Error('Falha ao carregar estatísticas MLM');
     }
   }
@@ -145,7 +159,7 @@ class AffiliatesService {
     try {
       console.log(`🌐 Buscando rede MLM para afiliado: ${affiliateId}`);
       
-      const response = await api.get(`/affiliates/${affiliateId}/mlm`);
+      const response = await api.get(`/affiliates/${affiliateId}/mlm-network`);
       
       console.log('🔗 Rede MLM:', response.data);
       
@@ -162,11 +176,11 @@ class AffiliatesService {
     try {
       console.log(`👤 Buscando detalhes do afiliado: ${affiliateId}`);
       
-      const response = await api.get(`/affiliates/${affiliateId}/mlm`);
+      const response = await api.get(`/affiliates/${affiliateId}`);
       
       console.log('📋 Detalhes do afiliado:', response.data);
       
-      return response.data.data;
+      return response.data;
 
     } catch (error) {
       console.error('❌ Erro ao buscar detalhes do afiliado:', error);
@@ -176,72 +190,33 @@ class AffiliatesService {
 
   // Buscar rede de um afiliado (método original)
   async getAffiliateNetwork(affiliateId: number): Promise<any> {
-    return this.getMLMNetwork(affiliateId);
-  }
-
-  // Sincronizar dados manualmente
-  async syncAffiliates(): Promise<any> {
     try {
-      console.log('🔄 Iniciando sincronização manual de afiliados...');
+      console.log(`🌐 Buscando rede do afiliado: ${affiliateId}`);
       
-      const response = await api.post('/sync/affiliates');
+      const response = await api.get(`/affiliates/${affiliateId}/network`);
       
-      console.log('✅ Sincronização concluída:', response.data);
+      console.log('🔗 Rede do afiliado:', response.data);
       
       return response.data;
 
     } catch (error) {
-      console.error('❌ Erro na sincronização:', error);
-      throw new Error('Falha na sincronização de afiliados');
+      console.error('❌ Erro ao buscar rede do afiliado:', error);
+      throw new Error('Falha ao carregar rede do afiliado');
     }
   }
 
-  // Processar MLM manualmente
-  async processMLM(): Promise<any> {
-    try {
-      console.log('🔄 Iniciando processamento MLM manual...');
-      
-      const response = await api.post('/mlm/process');
-      
-      console.log('✅ Processamento MLM concluído:', response.data);
-      
-      return response.data;
-
-    } catch (error) {
-      console.error('❌ Erro no processamento MLM:', error);
-      throw new Error('Falha no processamento MLM');
-    }
-  }
-
-  // Buscar status de sincronização
-  async getSyncStatus(): Promise<any> {
-    try {
-      console.log('📊 Buscando status de sincronização...');
-      
-      const response = await api.get('/sync/status');
-      
-      console.log('📈 Status de sincronização:', response.data);
-      
-      return response.data;
-
-    } catch (error) {
-      console.error('❌ Erro ao buscar status de sincronização:', error);
-      throw new Error('Falha ao buscar status de sincronização');
-    }
-  }
-
-  // Testar conexão com o microserviço
+  // Testar conexão com a API local
   async testConnection(): Promise<void> {
     try {
-      console.log('🔗 Testando conexão com microserviço de afiliados');
+      console.log('🔗 Testando conexão com API local');
       
-      const response = await api.get('/../health');
+      const response = await api.get('/health');
       
-      console.log('✅ Conexão com microserviço funcionando:', response.data);
+      console.log('✅ Conexão com API local funcionando:', response.data);
 
     } catch (error) {
-      console.error('❌ Erro na conexão com microserviço:', error);
-      throw new Error('Falha na conexão com o microserviço');
+      console.error('❌ Erro na conexão com API local:', error);
+      throw new Error('Falha na conexão com a API local');
     }
   }
 }

@@ -39,8 +39,9 @@ app.get('/api/health', async (req, res) => {
     const result = await pool.query('SELECT NOW()');
     res.json({
       status: 'success',
-      message: 'Conexão com banco de dados OK',
-      timestamp: result.rows[0].now
+      message: 'API funcionando - Conexão com banco de dados OK',
+      timestamp: result.rows[0].now,
+      database: 'PostgreSQL conectado'
     });
   } catch (error) {
     console.error('Erro no health check:', error);
@@ -52,21 +53,14 @@ app.get('/api/health', async (req, res) => {
   }
 });
 
-// Rota de health check
-app.get('/api/health', (req, res) => {
-  res.json({
-    status: 'success',
-    message: 'API funcionando',
-    timestamp: new Date().toISOString()
-  });
-});
-
 // Rota para buscar afiliados com dados 100% reais
 app.get('/api/affiliates', async (req, res) => {
   try {
     const page = parseInt(req.query.page) || 1;
     const limit = parseInt(req.query.limit) || 20;
     const offset = (page - 1) * limit;
+
+    console.log(`🔍 Buscando afiliados - Página: ${page}, Limit: ${limit}, Offset: ${offset}`);
 
     // Query para buscar afiliados reais da tabela tracked
     const affiliatesQuery = `
@@ -104,6 +98,8 @@ app.get('/api/affiliates', async (req, res) => {
     const total = parseInt(countResult.rows[0].total);
     const totalPages = Math.ceil(total / limit);
 
+    console.log(`📊 Encontrados ${affiliatesResult.rows.length} afiliados de ${total} total`);
+
     res.json({
       status: 'success',
       data: affiliatesResult.rows,
@@ -116,7 +112,7 @@ app.get('/api/affiliates', async (req, res) => {
     });
 
   } catch (error) {
-    console.error('Erro ao buscar afiliados:', error);
+    console.error('❌ Erro ao buscar afiliados:', error);
     res.status(500).json({
       status: 'error',
       message: 'Erro ao buscar afiliados',
@@ -128,6 +124,8 @@ app.get('/api/affiliates', async (req, res) => {
 // Rota para estatísticas dos afiliados com dados 100% reais
 app.get('/api/affiliates/stats', async (req, res) => {
   try {
+    console.log('📈 Buscando estatísticas de afiliados...');
+
     // Total de afiliados únicos reais
     const totalAffiliatesQuery = `
       SELECT COUNT(DISTINCT user_afil) as total_affiliates
@@ -166,20 +164,24 @@ app.get('/api/affiliates/stats', async (req, res) => {
       pool.query(topAffiliatesQuery)
     ]);
 
+    const stats = {
+      total_affiliates: parseInt(totalAffiliates.rows[0].total_affiliates),
+      total_tracking_records: parseInt(totalTracking.rows[0].total_tracking_records),
+      top_affiliates: topAffiliates.rows.map(row => ({
+        affiliate_id: row.affiliate_id,
+        client_count: parseInt(row.client_count)
+      }))
+    };
+
+    console.log('📊 Estatísticas calculadas:', stats);
+
     res.json({
       status: 'success',
-      stats: {
-        total_affiliates: parseInt(totalAffiliates.rows[0].total_affiliates),
-        total_tracking_records: parseInt(totalTracking.rows[0].total_tracking_records),
-        top_affiliates: topAffiliates.rows.map(row => ({
-          affiliate_id: row.affiliate_id,
-          client_count: parseInt(row.client_count)
-        }))
-      }
+      stats
     });
 
   } catch (error) {
-    console.error('Erro ao buscar estatísticas:', error);
+    console.error('❌ Erro ao buscar estatísticas:', error);
     res.status(500).json({
       status: 'error',
       message: 'Erro ao buscar estatísticas',
@@ -188,10 +190,172 @@ app.get('/api/affiliates/stats', async (req, res) => {
   }
 });
 
+// Nova rota para lista de afiliados com níveis MLM detalhados
+app.get('/api/affiliates/mlm-levels', async (req, res) => {
+  try {
+    const page = parseInt(req.query.page) || 1;
+    const limit = parseInt(req.query.limit) || 20;
+    const offset = (page - 1) * limit;
+
+    console.log(`🔍 Buscando afiliados com níveis MLM - Página: ${page}, Limit: ${limit}, Offset: ${offset}`);
+
+    // Testar conexão com banco primeiro
+    await pool.query('SELECT 1');
+    console.log('✅ Conexão com banco PostgreSQL OK');
+
+    // Query simplificada para buscar afiliados e calcular níveis MLM
+    const affiliatesMLMQuery = `
+      WITH affiliate_direct AS (
+        -- Indicações diretas (nível 0)
+        SELECT 
+          user_afil as affiliate_id,
+          COUNT(DISTINCT user_id) as direct_count
+        FROM tracked 
+        WHERE user_afil IS NOT NULL 
+          AND user_id IS NOT NULL
+          AND tracked_type_id = 1
+        GROUP BY user_afil
+      ),
+      affiliate_levels AS (
+        -- Calcular níveis MLM de forma simplificada
+        SELECT 
+          ad.affiliate_id,
+          ad.direct_count,
+          COALESCE(n1.count, 0) as n1,
+          COALESCE(n2.count, 0) as n2,
+          COALESCE(n3.count, 0) as n3,
+          COALESCE(n4.count, 0) as n4,
+          COALESCE(n5.count, 0) as n5
+        FROM affiliate_direct ad
+        LEFT JOIN (
+          -- Nível 1: Clientes do afiliado que se tornaram afiliados
+          SELECT 
+            t1.user_afil as main_affiliate,
+            COUNT(DISTINCT t2.user_id) as count
+          FROM tracked t1
+          INNER JOIN tracked t2 ON t1.user_id = t2.user_afil
+          WHERE t1.tracked_type_id = 1 AND t2.tracked_type_id = 1
+          GROUP BY t1.user_afil
+        ) n1 ON ad.affiliate_id = n1.main_affiliate
+        LEFT JOIN (
+          -- Nível 2: Simplificado
+          SELECT 
+            t1.user_afil as main_affiliate,
+            COUNT(DISTINCT t3.user_id) as count
+          FROM tracked t1
+          INNER JOIN tracked t2 ON t1.user_id = t2.user_afil
+          INNER JOIN tracked t3 ON t2.user_id = t3.user_afil
+          WHERE t1.tracked_type_id = 1 AND t2.tracked_type_id = 1 AND t3.tracked_type_id = 1
+          GROUP BY t1.user_afil
+        ) n2 ON ad.affiliate_id = n2.main_affiliate
+        LEFT JOIN (
+          -- Nível 3: Simplificado
+          SELECT 
+            t1.user_afil as main_affiliate,
+            COUNT(DISTINCT t4.user_id) as count
+          FROM tracked t1
+          INNER JOIN tracked t2 ON t1.user_id = t2.user_afil
+          INNER JOIN tracked t3 ON t2.user_id = t3.user_afil
+          INNER JOIN tracked t4 ON t3.user_id = t4.user_afil
+          WHERE t1.tracked_type_id = 1 AND t2.tracked_type_id = 1 AND t3.tracked_type_id = 1 AND t4.tracked_type_id = 1
+          GROUP BY t1.user_afil
+        ) n3 ON ad.affiliate_id = n3.main_affiliate
+        LEFT JOIN (
+          -- Nível 4: Simplificado
+          SELECT 
+            t1.user_afil as main_affiliate,
+            COUNT(DISTINCT t5.user_id) as count
+          FROM tracked t1
+          INNER JOIN tracked t2 ON t1.user_id = t2.user_afil
+          INNER JOIN tracked t3 ON t2.user_id = t3.user_afil
+          INNER JOIN tracked t4 ON t3.user_id = t4.user_afil
+          INNER JOIN tracked t5 ON t4.user_id = t5.user_afil
+          WHERE t1.tracked_type_id = 1 AND t2.tracked_type_id = 1 AND t3.tracked_type_id = 1 AND t4.tracked_type_id = 1 AND t5.tracked_type_id = 1
+          GROUP BY t1.user_afil
+        ) n4 ON ad.affiliate_id = n4.main_affiliate
+        LEFT JOIN (
+          -- Nível 5: Simplificado
+          SELECT 
+            t1.user_afil as main_affiliate,
+            COUNT(DISTINCT t6.user_id) as count
+          FROM tracked t1
+          INNER JOIN tracked t2 ON t1.user_id = t2.user_afil
+          INNER JOIN tracked t3 ON t2.user_id = t3.user_afil
+          INNER JOIN tracked t4 ON t3.user_id = t4.user_afil
+          INNER JOIN tracked t5 ON t4.user_id = t5.user_afil
+          INNER JOIN tracked t6 ON t5.user_id = t6.user_afil
+          WHERE t1.tracked_type_id = 1 AND t2.tracked_type_id = 1 AND t3.tracked_type_id = 1 AND t4.tracked_type_id = 1 AND t5.tracked_type_id = 1 AND t6.tracked_type_id = 1
+          GROUP BY t1.user_afil
+        ) n5 ON ad.affiliate_id = n5.main_affiliate
+      )
+      SELECT 
+        affiliate_id,
+        direct_count + n1 + n2 + n3 + n4 + n5 as total,
+        n1,
+        n2,
+        n3,
+        n4,
+        n5
+      FROM affiliate_levels
+      WHERE direct_count > 0
+      ORDER BY total DESC
+      LIMIT $1 OFFSET $2
+    `;
+
+    console.log('🔄 Executando query MLM...');
+
+    // Query para contar total de afiliados
+    const countQuery = `
+      SELECT COUNT(DISTINCT user_afil) as total
+      FROM tracked 
+      WHERE user_afil IS NOT NULL 
+        AND user_id IS NOT NULL
+        AND tracked_type_id = 1
+    `;
+
+    const [affiliatesResult, countResult] = await Promise.all([
+      pool.query(affiliatesMLMQuery, [limit, offset]),
+      pool.query(countQuery)
+    ]);
+
+    const total = parseInt(countResult.rows[0].total);
+    const totalPages = Math.ceil(total / limit);
+
+    console.log(`📊 Query executada com sucesso! Encontrados ${affiliatesResult.rows.length} afiliados de ${total} total`);
+
+    res.json({
+      status: 'success',
+      data: affiliatesResult.rows,
+      pagination: {
+        page,
+        pages: totalPages,
+        total,
+        limit
+      }
+    });
+
+  } catch (error) {
+    console.error('❌ Erro detalhado ao buscar afiliados MLM:', {
+      message: error.message,
+      stack: error.stack,
+      code: error.code
+    });
+    
+    res.status(500).json({
+      status: 'error',
+      message: 'Falha ao carregar estatísticas MLM',
+      error: error.message,
+      details: process.env.NODE_ENV === 'development' ? error.stack : undefined
+    });
+  }
+});
+
 // Rota para detalhes de um afiliado específico
 app.get('/api/affiliates/:id', async (req, res) => {
   try {
     const affiliateId = req.params.id;
+
+    console.log(`👤 Buscando detalhes do afiliado: ${affiliateId}`);
 
     const detailsQuery = `
       SELECT 
@@ -214,13 +378,15 @@ app.get('/api/affiliates/:id', async (req, res) => {
       });
     }
 
+    console.log('📋 Detalhes encontrados:', result.rows[0]);
+
     res.json({
       status: 'success',
       data: result.rows[0]
     });
 
   } catch (error) {
-    console.error('Erro ao buscar detalhes do afiliado:', error);
+    console.error('❌ Erro ao buscar detalhes do afiliado:', error);
     res.status(500).json({
       status: 'error',
       message: 'Erro ao buscar detalhes do afiliado',
@@ -229,10 +395,172 @@ app.get('/api/affiliates/:id', async (req, res) => {
   }
 });
 
+// Nova rota para lista de afiliados com níveis MLM detalhados
+app.get('/api/affiliates/mlm-levels', async (req, res) => {
+  try {
+    const page = parseInt(req.query.page) || 1;
+    const limit = parseInt(req.query.limit) || 20;
+    const offset = (page - 1) * limit;
+
+    console.log(`🔍 Buscando afiliados com níveis MLM - Página: ${page}, Limit: ${limit}, Offset: ${offset}`);
+
+    // Testar conexão com banco primeiro
+    await pool.query('SELECT 1');
+    console.log('✅ Conexão com banco PostgreSQL OK');
+
+    // Query simplificada para buscar afiliados e calcular níveis MLM
+    const affiliatesMLMQuery = `
+      WITH affiliate_direct AS (
+        -- Indicações diretas (nível 0)
+        SELECT 
+          user_afil as affiliate_id,
+          COUNT(DISTINCT user_id) as direct_count
+        FROM tracked 
+        WHERE user_afil IS NOT NULL 
+          AND user_id IS NOT NULL
+          AND tracked_type_id = 1
+        GROUP BY user_afil
+      ),
+      affiliate_levels AS (
+        -- Calcular níveis MLM de forma simplificada
+        SELECT 
+          ad.affiliate_id,
+          ad.direct_count,
+          COALESCE(n1.count, 0) as n1,
+          COALESCE(n2.count, 0) as n2,
+          COALESCE(n3.count, 0) as n3,
+          COALESCE(n4.count, 0) as n4,
+          COALESCE(n5.count, 0) as n5
+        FROM affiliate_direct ad
+        LEFT JOIN (
+          -- Nível 1: Clientes do afiliado que se tornaram afiliados
+          SELECT 
+            t1.user_afil as main_affiliate,
+            COUNT(DISTINCT t2.user_id) as count
+          FROM tracked t1
+          INNER JOIN tracked t2 ON t1.user_id = t2.user_afil
+          WHERE t1.tracked_type_id = 1 AND t2.tracked_type_id = 1
+          GROUP BY t1.user_afil
+        ) n1 ON ad.affiliate_id = n1.main_affiliate
+        LEFT JOIN (
+          -- Nível 2: Simplificado
+          SELECT 
+            t1.user_afil as main_affiliate,
+            COUNT(DISTINCT t3.user_id) as count
+          FROM tracked t1
+          INNER JOIN tracked t2 ON t1.user_id = t2.user_afil
+          INNER JOIN tracked t3 ON t2.user_id = t3.user_afil
+          WHERE t1.tracked_type_id = 1 AND t2.tracked_type_id = 1 AND t3.tracked_type_id = 1
+          GROUP BY t1.user_afil
+        ) n2 ON ad.affiliate_id = n2.main_affiliate
+        LEFT JOIN (
+          -- Nível 3: Simplificado
+          SELECT 
+            t1.user_afil as main_affiliate,
+            COUNT(DISTINCT t4.user_id) as count
+          FROM tracked t1
+          INNER JOIN tracked t2 ON t1.user_id = t2.user_afil
+          INNER JOIN tracked t3 ON t2.user_id = t3.user_afil
+          INNER JOIN tracked t4 ON t3.user_id = t4.user_afil
+          WHERE t1.tracked_type_id = 1 AND t2.tracked_type_id = 1 AND t3.tracked_type_id = 1 AND t4.tracked_type_id = 1
+          GROUP BY t1.user_afil
+        ) n3 ON ad.affiliate_id = n3.main_affiliate
+        LEFT JOIN (
+          -- Nível 4: Simplificado
+          SELECT 
+            t1.user_afil as main_affiliate,
+            COUNT(DISTINCT t5.user_id) as count
+          FROM tracked t1
+          INNER JOIN tracked t2 ON t1.user_id = t2.user_afil
+          INNER JOIN tracked t3 ON t2.user_id = t3.user_afil
+          INNER JOIN tracked t4 ON t3.user_id = t4.user_afil
+          INNER JOIN tracked t5 ON t4.user_id = t5.user_afil
+          WHERE t1.tracked_type_id = 1 AND t2.tracked_type_id = 1 AND t3.tracked_type_id = 1 AND t4.tracked_type_id = 1 AND t5.tracked_type_id = 1
+          GROUP BY t1.user_afil
+        ) n4 ON ad.affiliate_id = n4.main_affiliate
+        LEFT JOIN (
+          -- Nível 5: Simplificado
+          SELECT 
+            t1.user_afil as main_affiliate,
+            COUNT(DISTINCT t6.user_id) as count
+          FROM tracked t1
+          INNER JOIN tracked t2 ON t1.user_id = t2.user_afil
+          INNER JOIN tracked t3 ON t2.user_id = t3.user_afil
+          INNER JOIN tracked t4 ON t3.user_id = t4.user_afil
+          INNER JOIN tracked t5 ON t4.user_id = t5.user_afil
+          INNER JOIN tracked t6 ON t5.user_id = t6.user_afil
+          WHERE t1.tracked_type_id = 1 AND t2.tracked_type_id = 1 AND t3.tracked_type_id = 1 AND t4.tracked_type_id = 1 AND t5.tracked_type_id = 1 AND t6.tracked_type_id = 1
+          GROUP BY t1.user_afil
+        ) n5 ON ad.affiliate_id = n5.main_affiliate
+      )
+      SELECT 
+        affiliate_id,
+        direct_count + n1 + n2 + n3 + n4 + n5 as total,
+        n1,
+        n2,
+        n3,
+        n4,
+        n5
+      FROM affiliate_levels
+      WHERE direct_count > 0
+      ORDER BY total DESC
+      LIMIT $1 OFFSET $2
+    `;
+
+    console.log('🔄 Executando query MLM...');
+
+    // Query para contar total de afiliados
+    const countQuery = `
+      SELECT COUNT(DISTINCT user_afil) as total
+      FROM tracked 
+      WHERE user_afil IS NOT NULL 
+        AND user_id IS NOT NULL
+        AND tracked_type_id = 1
+    `;
+
+    const [affiliatesResult, countResult] = await Promise.all([
+      pool.query(affiliatesMLMQuery, [limit, offset]),
+      pool.query(countQuery)
+    ]);
+
+    const total = parseInt(countResult.rows[0].total);
+    const totalPages = Math.ceil(total / limit);
+
+    console.log(`📊 Query executada com sucesso! Encontrados ${affiliatesResult.rows.length} afiliados de ${total} total`);
+
+    res.json({
+      status: 'success',
+      data: affiliatesResult.rows,
+      pagination: {
+        page,
+        pages: totalPages,
+        total,
+        limit
+      }
+    });
+
+  } catch (error) {
+    console.error('❌ Erro detalhado ao buscar afiliados MLM:', {
+      message: error.message,
+      stack: error.stack,
+      code: error.code
+    });
+    
+    res.status(500).json({
+      status: 'error',
+      message: 'Falha ao carregar estatísticas MLM',
+      error: error.message,
+      details: process.env.NODE_ENV === 'development' ? error.stack : undefined
+    });
+  }
+});
+
 // Rota para rede de um afiliado
 app.get('/api/affiliates/:id/network', async (req, res) => {
   try {
     const affiliateId = req.params.id;
+
+    console.log(`🌐 Buscando rede do afiliado: ${affiliateId}`);
 
     const networkQuery = `
       SELECT 
@@ -245,6 +573,8 @@ app.get('/api/affiliates/:id/network', async (req, res) => {
 
     const result = await pool.query(networkQuery, [affiliateId]);
 
+    console.log(`🔗 Rede encontrada: ${result.rows.length} clientes`);
+
     res.json({
       status: 'success',
       data: result.rows,
@@ -252,7 +582,7 @@ app.get('/api/affiliates/:id/network', async (req, res) => {
     });
 
   } catch (error) {
-    console.error('Erro ao buscar rede do afiliado:', error);
+    console.error('❌ Erro ao buscar rede do afiliado:', error);
     res.status(500).json({
       status: 'error',
       message: 'Erro ao buscar rede do afiliado',
@@ -265,6 +595,8 @@ app.get('/api/affiliates/:id/network', async (req, res) => {
 app.get('/api/affiliates/:id/mlm-network', async (req, res) => {
   try {
     const affiliateId = parseInt(req.params.id);
+
+    console.log(`🌐 Buscando rede MLM do afiliado: ${affiliateId}`);
 
     // Query recursiva para calcular rede MLM até 5 níveis
     const mlmNetworkQuery = `
@@ -365,6 +697,8 @@ app.get('/api/affiliates/:id/mlm-network', async (req, res) => {
       };
     });
 
+    console.log(`🔗 Rede MLM calculada: ${networkResult.rows.length} total, ${statsResult.rows.length} níveis`);
+
     res.json({
       status: 'success',
       affiliate_id: affiliateId,
@@ -375,7 +709,7 @@ app.get('/api/affiliates/:id/mlm-network', async (req, res) => {
     });
 
   } catch (error) {
-    console.error('Erro ao buscar rede MLM:', error);
+    console.error('❌ Erro ao buscar rede MLM:', error);
     res.status(500).json({
       status: 'error',
       message: 'Erro ao buscar rede MLM',
@@ -397,58 +731,101 @@ app.get('/api/affiliates/mlm-levels', async (req, res) => {
     await pool.query('SELECT 1');
     console.log('✅ Conexão com banco PostgreSQL OK');
 
-    // Query para buscar afiliados e calcular níveis MLM
+    // Query simplificada para buscar afiliados e calcular níveis MLM
     const affiliatesMLMQuery = `
-      WITH RECURSIVE affiliate_levels AS (
-        -- Nível 0: Afiliados principais (indicações diretas)
+      WITH affiliate_direct AS (
+        -- Indicações diretas (nível 0)
         SELECT 
-          t.user_afil as affiliate_id,
-          t.user_id as client_id,
-          0 as level,
-          ARRAY[t.user_afil] as path
-        FROM tracked t
-        WHERE t.user_afil IS NOT NULL 
-          AND t.user_id IS NOT NULL
-          AND t.tracked_type_id = 1
-        
-        UNION ALL
-        
-        -- Níveis 1-5: Clientes que se tornaram afiliados
-        SELECT 
-          t.user_afil as affiliate_id,
-          t.user_id as client_id,
-          al.level + 1 as level,
-          al.path || t.user_afil as path
-        FROM tracked t
-        INNER JOIN affiliate_levels al ON t.user_afil = al.client_id
-        WHERE al.level < 5
-          AND t.user_id IS NOT NULL
-          AND t.tracked_type_id = 1
-          AND NOT (t.user_afil = ANY(al.path))
+          user_afil as affiliate_id,
+          COUNT(DISTINCT user_id) as direct_count
+        FROM tracked 
+        WHERE user_afil IS NOT NULL 
+          AND user_id IS NOT NULL
+          AND tracked_type_id = 1
+        GROUP BY user_afil
       ),
-      affiliate_stats AS (
+      affiliate_levels AS (
+        -- Calcular níveis MLM de forma simplificada
         SELECT 
-          affiliate_id,
-          COUNT(CASE WHEN level = 0 THEN 1 END) as total_direct,
-          COUNT(CASE WHEN level = 1 THEN 1 END) as n1,
-          COUNT(CASE WHEN level = 2 THEN 1 END) as n2,
-          COUNT(CASE WHEN level = 3 THEN 1 END) as n3,
-          COUNT(CASE WHEN level = 4 THEN 1 END) as n4,
-          COUNT(CASE WHEN level = 5 THEN 1 END) as n5,
-          COUNT(*) as total_network
-        FROM affiliate_levels
-        GROUP BY affiliate_id
+          ad.affiliate_id,
+          ad.direct_count,
+          COALESCE(n1.count, 0) as n1,
+          COALESCE(n2.count, 0) as n2,
+          COALESCE(n3.count, 0) as n3,
+          COALESCE(n4.count, 0) as n4,
+          COALESCE(n5.count, 0) as n5
+        FROM affiliate_direct ad
+        LEFT JOIN (
+          -- Nível 1: Clientes do afiliado que se tornaram afiliados
+          SELECT 
+            t1.user_afil as main_affiliate,
+            COUNT(DISTINCT t2.user_id) as count
+          FROM tracked t1
+          INNER JOIN tracked t2 ON t1.user_id = t2.user_afil
+          WHERE t1.tracked_type_id = 1 AND t2.tracked_type_id = 1
+          GROUP BY t1.user_afil
+        ) n1 ON ad.affiliate_id = n1.main_affiliate
+        LEFT JOIN (
+          -- Nível 2: Simplificado
+          SELECT 
+            t1.user_afil as main_affiliate,
+            COUNT(DISTINCT t3.user_id) as count
+          FROM tracked t1
+          INNER JOIN tracked t2 ON t1.user_id = t2.user_afil
+          INNER JOIN tracked t3 ON t2.user_id = t3.user_afil
+          WHERE t1.tracked_type_id = 1 AND t2.tracked_type_id = 1 AND t3.tracked_type_id = 1
+          GROUP BY t1.user_afil
+        ) n2 ON ad.affiliate_id = n2.main_affiliate
+        LEFT JOIN (
+          -- Nível 3: Simplificado
+          SELECT 
+            t1.user_afil as main_affiliate,
+            COUNT(DISTINCT t4.user_id) as count
+          FROM tracked t1
+          INNER JOIN tracked t2 ON t1.user_id = t2.user_afil
+          INNER JOIN tracked t3 ON t2.user_id = t3.user_afil
+          INNER JOIN tracked t4 ON t3.user_id = t4.user_afil
+          WHERE t1.tracked_type_id = 1 AND t2.tracked_type_id = 1 AND t3.tracked_type_id = 1 AND t4.tracked_type_id = 1
+          GROUP BY t1.user_afil
+        ) n3 ON ad.affiliate_id = n3.main_affiliate
+        LEFT JOIN (
+          -- Nível 4: Simplificado
+          SELECT 
+            t1.user_afil as main_affiliate,
+            COUNT(DISTINCT t5.user_id) as count
+          FROM tracked t1
+          INNER JOIN tracked t2 ON t1.user_id = t2.user_afil
+          INNER JOIN tracked t3 ON t2.user_id = t3.user_afil
+          INNER JOIN tracked t4 ON t3.user_id = t4.user_afil
+          INNER JOIN tracked t5 ON t4.user_id = t5.user_afil
+          WHERE t1.tracked_type_id = 1 AND t2.tracked_type_id = 1 AND t3.tracked_type_id = 1 AND t4.tracked_type_id = 1 AND t5.tracked_type_id = 1
+          GROUP BY t1.user_afil
+        ) n4 ON ad.affiliate_id = n4.main_affiliate
+        LEFT JOIN (
+          -- Nível 5: Simplificado
+          SELECT 
+            t1.user_afil as main_affiliate,
+            COUNT(DISTINCT t6.user_id) as count
+          FROM tracked t1
+          INNER JOIN tracked t2 ON t1.user_id = t2.user_afil
+          INNER JOIN tracked t3 ON t2.user_id = t3.user_afil
+          INNER JOIN tracked t4 ON t3.user_id = t4.user_afil
+          INNER JOIN tracked t5 ON t4.user_id = t5.user_afil
+          INNER JOIN tracked t6 ON t5.user_id = t6.user_afil
+          WHERE t1.tracked_type_id = 1 AND t2.tracked_type_id = 1 AND t3.tracked_type_id = 1 AND t4.tracked_type_id = 1 AND t5.tracked_type_id = 1 AND t6.tracked_type_id = 1
+          GROUP BY t1.user_afil
+        ) n5 ON ad.affiliate_id = n5.main_affiliate
       )
       SELECT 
         affiliate_id,
-        total_direct + n1 + n2 + n3 + n4 + n5 as total,
+        direct_count + n1 + n2 + n3 + n4 + n5 as total,
         n1,
         n2,
         n3,
         n4,
         n5
-      FROM affiliate_stats
-      WHERE total_direct > 0
+      FROM affiliate_levels
+      WHERE direct_count > 0
       ORDER BY total DESC
       LIMIT $1 OFFSET $2
     `;
@@ -494,7 +871,7 @@ app.get('/api/affiliates/mlm-levels', async (req, res) => {
     
     res.status(500).json({
       status: 'error',
-      message: 'Erro ao buscar afiliados com níveis MLM',
+      message: 'Falha ao carregar estatísticas MLM',
       error: error.message,
       details: process.env.NODE_ENV === 'development' ? error.stack : undefined
     });
@@ -520,6 +897,10 @@ const PORT = process.env.PORT || 5001;
 app.listen(PORT, '0.0.0.0', () => {
   console.log(`🚀 Servidor rodando na porta ${PORT}`);
   console.log(`📊 API disponível em http://localhost:${PORT}/api`);
+  console.log(`🔗 Health check: http://localhost:${PORT}/api/health`);
+  console.log(`👥 Afiliados: http://localhost:${PORT}/api/affiliates`);
+  console.log(`📈 Estatísticas: http://localhost:${PORT}/api/affiliates/stats`);
+  console.log(`🌐 MLM Levels: http://localhost:${PORT}/api/affiliates/mlm-levels`);
 });
 
 module.exports = app;
