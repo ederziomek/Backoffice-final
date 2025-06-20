@@ -15,16 +15,18 @@ const RealAffiliatesPage: React.FC = () => {
     try {
       setLoading(true);
       setError(null);
+      
+      console.log(`🔍 Buscando afiliados - Página: ${page}`);
+      
       const response = await affiliatesService.getAffiliates(page, limit);
       
-      if (response.status === 'success') {
-        setAffiliates(response.data);
-        setTotalPages(response.pagination.pages);
-        setCurrentPage(response.pagination.page);
-      } else {
-        setError(response.message || 'Erro ao carregar afiliados');
-      }
+      console.log('📊 Dados recebidos:', response);
+      
+      setAffiliates(response.affiliates || []);
+      setTotalPages(response.pagination?.pages || 1);
+      setCurrentPage(response.pagination?.page || 1);
     } catch (err) {
+      console.error('❌ Erro ao buscar afiliados:', err);
       setError(err instanceof Error ? err.message : 'Erro de conexão com o servidor');
     } finally {
       setLoading(false);
@@ -33,18 +35,23 @@ const RealAffiliatesPage: React.FC = () => {
 
   const fetchStats = async () => {
     try {
+      console.log('📊 Buscando estatísticas...');
+      
       const response = await affiliatesService.getStats();
       
+      console.log('📈 Estatísticas recebidas:', response);
+      
       if (response.status === 'success') {
-        setStats(response.stats);
+        setStats(response.data);
       }
     } catch (err) {
-      console.error('Erro ao carregar estatísticas:', err);
+      console.error('❌ Erro ao carregar estatísticas:', err);
     }
   };
 
   const testConnection = async () => {
     try {
+      console.log('🔗 Testando conexão...');
       await affiliatesService.testConnection();
       console.log('✅ Conexão com API funcionando');
     } catch (err) {
@@ -134,10 +141,10 @@ const RealAffiliatesPage: React.FC = () => {
               <div>
                 <p className="text-gray-400 text-sm">Top Afiliado</p>
                 <p className="text-2xl font-bold text-branco">
-                  {stats.top_affiliates.length > 0 ? stats.top_affiliates[0].client_count : 0}
+                  {stats.top_affiliates && stats.top_affiliates.length > 0 ? stats.top_affiliates[0].client_count : 0}
                 </p>
                 <p className="text-xs text-gray-500 mt-1">
-                  {stats.top_affiliates.length > 0 ? `ID: ${stats.top_affiliates[0].affiliate_id}` : 'Nenhum dado'}
+                  {stats.top_affiliates && stats.top_affiliates.length > 0 ? `ID: ${stats.top_affiliates[0].affiliate_id}` : 'Nenhum dado'}
                 </p>
               </div>
               <TrendingUp className="w-8 h-8 text-yellow-400" />
