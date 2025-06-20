@@ -905,3 +905,167 @@ app.listen(PORT, '0.0.0.0', () => {
 
 module.exports = app;
 
+
+
+// Rota para estatísticas do dashboard com dados 100% reais
+app.get('/api/dashboard/stats', async (req, res) => {
+  try {
+    console.log('📊 Buscando estatísticas do dashboard...');
+
+    // Executar queries em paralelo para melhor performance
+    const [
+      usuariosResult,
+      depositosResult,
+      saquesResult,
+      apostasResult,
+      usuariosAtivosResult
+    ] = await Promise.all([
+      // Total de usuários
+      pool.query('SELECT COUNT(*) as total FROM cadastro'),
+      
+      // Total de depósitos
+      pool.query(`
+        SELECT 
+          COUNT(*) as total_depositos,
+          COALESCE(SUM(CAST(amount AS DECIMAL)), 0) as valor_total
+        FROM depositos 
+        WHERE status = 'APPROVED'
+      `),
+      
+      // Total de saques
+      pool.query(`
+        SELECT 
+          COUNT(*) as total_saques,
+          COALESCE(SUM(CAST(valor AS DECIMAL)), 0) as valor_total
+        FROM saques 
+        WHERE status = 'APPROVED'
+      `),
+      
+      // Total de apostas
+      pool.query(`
+        SELECT 
+          COUNT(*) as total_apostas,
+          COALESCE(SUM(CAST(bet_amount AS DECIMAL)), 0) as valor_total
+        FROM casino_bets_v 
+        WHERE status = 'COMPLETED'
+      `),
+      
+      // Usuários ativos nos últimos 30 dias
+      pool.query(`
+        SELECT COUNT(DISTINCT user_id) as usuarios_ativos
+        FROM casino_bets_v 
+        WHERE played_date >= NOW() - INTERVAL '30 days'
+          AND status = 'COMPLETED'
+      `)
+    ]);
+
+    const stats = {
+      total_usuarios: parseInt(usuariosResult.rows[0].total),
+      total_depositos: parseInt(depositosResult.rows[0].total_depositos),
+      total_saques: parseInt(saquesResult.rows[0].total_saques),
+      total_apostas: parseInt(apostasResult.rows[0].total_apostas),
+      valor_total_depositos: parseFloat(depositosResult.rows[0].valor_total),
+      valor_total_saques: parseFloat(saquesResult.rows[0].valor_total),
+      valor_total_apostas: parseFloat(apostasResult.rows[0].valor_total),
+      usuarios_ativos_30d: parseInt(usuariosAtivosResult.rows[0].usuarios_ativos)
+    };
+
+    console.log('📈 Estatísticas calculadas:', stats);
+
+    res.json({
+      status: 'success',
+      stats: stats,
+      timestamp: new Date().toISOString()
+    });
+
+  } catch (error) {
+    console.error('❌ Erro ao buscar estatísticas do dashboard:', error);
+    res.status(500).json({
+      status: 'error',
+      message: 'Erro ao buscar estatísticas do dashboard',
+      error: error.message
+    });
+  }
+});
+
+// Rota para atividades recentes
+app.get('/api/dashboard/recent-activity', async (req, res) => {
+  try {
+    const limit = parseInt(req.query.limit) || 20;
+    console.log(`🔄 Buscando ${limit} atividades recentes...`);
+
+    // Buscar depósitos e saques recentes
+    const [depositosRecentes, saquesRecentes] = await Promise.all([
+      pool.query(`
+        SELECT 
+          'deposito' as tipo,
+          id::text as id,
+          user_id,
+          amount as valor,
+          data_deposito as data,
+          status
+        FROM depositos 
+        WHERE status = 'APPROVED'
+        ORDER BY data_deposito DESC 
+        LIMIT $1
+      `, [Math.ceil(limit / 2)]),
+      
+      pool.query(`
+        SELECT 
+          'saque' as tipo,
+          id::text as id,
+          user_id,
+          valor,
+          data_saques as data,
+          status
+        FROM saques 
+        WHERE status = 'APPROVED'
+        ORDER BY data_saques DESC 
+        LIMIT $1
+      `, [Math.ceil(limit / 2)])
+    ]);
+
+    // Combinar e ordenar por data
+    const atividades = [
+      ...depositosRecentes.rows,
+      ...saquesRecentes.rows
+    ].sort((a, b) => new Date(b.data) - new Date(a.data)).slice(0, limit);
+
+    console.log(`📋 Encontradas ${atividades.length} atividades recentes`);
+
+    res.json({
+      status: 'success',
+      data: atividades,
+      timestamp: new Date().toISOString()
+    });
+
+  } catch (error) {
+    console.error('❌ Erro ao buscar atividades recentes:', error);
+    res.status(500).json({
+      status: 'error',
+      message: 'Erro ao buscar atividades recentes',
+      error: error.message
+    });
+  }
+});
+
+// Rota para testar conexão com banco
+app.get('/api/database/test', async (req, res) => {
+  try {
+    const result = await pool.query('SELECT NOW() as timestamp, version() as version');
+    res.json({
+      status: 'success',
+      message: 'Conexão com banco de dados OK',
+      timestamp: result.rows[0].timestamp,
+      database_version: result.rows[0].version
+    });
+  } catch (error) {
+    console.error('❌ Erro no teste de conexão:', error);
+    res.status(500).json({
+      status: 'error',
+      message: 'Erro de conexão com o banco de dados',
+      error: error.message
+    });
+  }
+});
+
