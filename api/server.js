@@ -52,36 +52,39 @@ app.get('/api/health', async (req, res) => {
   }
 });
 
-// Rota para buscar afiliados
+// Rota para buscar afiliados com dados 100% reais
 app.get('/api/affiliates', async (req, res) => {
   try {
     const page = parseInt(req.query.page) || 1;
     const limit = parseInt(req.query.limit) || 20;
     const offset = (page - 1) * limit;
 
-    // Query para buscar afiliados com clientes
+    // Query para buscar afiliados reais da tabela tracked
     const affiliatesQuery = `
       SELECT 
-        affiliate_id,
-        COUNT(DISTINCT client_id) as total_clients,
-        MIN(level) as min_level,
-        MAX(level) as max_level,
-        'Ativo' as status
-      FROM tracked 
-      WHERE affiliate_id IS NOT NULL 
-        AND client_id IS NOT NULL
-      GROUP BY affiliate_id
-      HAVING COUNT(DISTINCT client_id) > 0
+        t.user_afil as affiliate_id,
+        COUNT(DISTINCT t.user_id) as total_clients,
+        MIN(1) as min_level,
+        MAX(1) as max_level,
+        'Ativo' as status,
+        COUNT(*) as total_records
+      FROM tracked t
+      WHERE t.user_afil IS NOT NULL 
+        AND t.user_id IS NOT NULL
+        AND t.tracked_type_id = 1
+      GROUP BY t.user_afil
+      HAVING COUNT(DISTINCT t.user_id) > 0
       ORDER BY total_clients DESC
       LIMIT $1 OFFSET $2
     `;
 
-    // Query para contar total de afiliados
+    // Query para contar total de afiliados reais
     const countQuery = `
-      SELECT COUNT(DISTINCT affiliate_id) as total
+      SELECT COUNT(DISTINCT user_afil) as total
       FROM tracked 
-      WHERE affiliate_id IS NOT NULL 
-        AND client_id IS NOT NULL
+      WHERE user_afil IS NOT NULL 
+        AND user_id IS NOT NULL
+        AND tracked_type_id = 1
     `;
 
     const [affiliatesResult, countResult] = await Promise.all([
@@ -113,65 +116,52 @@ app.get('/api/affiliates', async (req, res) => {
   }
 });
 
-// Rota para estatísticas dos afiliados
+// Rota para estatísticas dos afiliados com dados 100% reais
 app.get('/api/affiliates/stats', async (req, res) => {
   try {
-    // Total de afiliados únicos
+    // Total de afiliados únicos reais
     const totalAffiliatesQuery = `
-      SELECT COUNT(DISTINCT affiliate_id) as total_affiliates
+      SELECT COUNT(DISTINCT user_afil) as total_affiliates
       FROM tracked 
-      WHERE affiliate_id IS NOT NULL AND client_id IS NOT NULL
+      WHERE user_afil IS NOT NULL 
+        AND user_id IS NOT NULL
+        AND tracked_type_id = 1
     `;
 
-    // Total de registros de tracking
+    // Total de registros de tracking reais
     const totalTrackingQuery = `
       SELECT COUNT(*) as total_tracking_records
       FROM tracked 
-      WHERE affiliate_id IS NOT NULL AND client_id IS NOT NULL
+      WHERE user_afil IS NOT NULL 
+        AND user_id IS NOT NULL
+        AND tracked_type_id = 1
     `;
 
-    // Distribuição por níveis
-    const levelDistributionQuery = `
-      SELECT 
-        level,
-        COUNT(*) as count
-      FROM tracked 
-      WHERE affiliate_id IS NOT NULL AND client_id IS NOT NULL
-      GROUP BY level
-      ORDER BY level
-    `;
-
-    // Top 5 afiliados
+    // Top 5 afiliados reais
     const topAffiliatesQuery = `
       SELECT 
-        affiliate_id,
-        COUNT(DISTINCT client_id) as client_count
+        user_afil as affiliate_id,
+        COUNT(DISTINCT user_id) as client_count
       FROM tracked 
-      WHERE affiliate_id IS NOT NULL AND client_id IS NOT NULL
-      GROUP BY affiliate_id
+      WHERE user_afil IS NOT NULL 
+        AND user_id IS NOT NULL
+        AND tracked_type_id = 1
+      GROUP BY user_afil
       ORDER BY client_count DESC
       LIMIT 5
     `;
 
-    const [totalAffiliates, totalTracking, levelDistribution, topAffiliates] = await Promise.all([
+    const [totalAffiliates, totalTracking, topAffiliates] = await Promise.all([
       pool.query(totalAffiliatesQuery),
       pool.query(totalTrackingQuery),
-      pool.query(levelDistributionQuery),
       pool.query(topAffiliatesQuery)
     ]);
-
-    // Processar distribuição por níveis
-    const levelDist = {};
-    levelDistribution.rows.forEach(row => {
-      levelDist[`Nível ${row.level}`] = parseInt(row.count);
-    });
 
     res.json({
       status: 'success',
       stats: {
         total_affiliates: parseInt(totalAffiliates.rows[0].total_affiliates),
         total_tracking_records: parseInt(totalTracking.rows[0].total_tracking_records),
-        level_distribution: levelDist,
         top_affiliates: topAffiliates.rows.map(row => ({
           affiliate_id: row.affiliate_id,
           client_count: parseInt(row.client_count)
@@ -260,6 +250,129 @@ app.get('/api/affiliates/:id/network', async (req, res) => {
     res.status(500).json({
       status: 'error',
       message: 'Erro ao buscar rede do afiliado',
+      error: error.message
+    });
+  }
+});
+
+// Nova rota para rede MLM até 5 níveis com dados 100% reais
+app.get('/api/affiliates/:id/mlm-network', async (req, res) => {
+  try {
+    const affiliateId = parseInt(req.params.id);
+
+    // Query recursiva para calcular rede MLM até 5 níveis
+    const mlmNetworkQuery = `
+      WITH RECURSIVE affiliate_network AS (
+        -- Nível 0: O afiliado principal
+        SELECT 
+          user_afil as affiliate_id,
+          user_id as client_id,
+          0 as level,
+          ARRAY[user_afil] as path
+        FROM tracked 
+        WHERE user_afil = $1 
+          AND user_id IS NOT NULL
+          AND tracked_type_id = 1
+        
+        UNION ALL
+        
+        -- Níveis 1-5: Clientes que se tornaram afiliados
+        SELECT 
+          t.user_afil as affiliate_id,
+          t.user_id as client_id,
+          an.level + 1 as level,
+          an.path || t.user_afil as path
+        FROM tracked t
+        INNER JOIN affiliate_network an ON t.user_afil = an.client_id
+        WHERE an.level < 5
+          AND t.user_id IS NOT NULL
+          AND t.tracked_type_id = 1
+          AND NOT (t.user_afil = ANY(an.path)) -- Evitar loops
+      )
+      SELECT 
+        level,
+        affiliate_id,
+        client_id,
+        COUNT(*) OVER (PARTITION BY level) as level_count,
+        COUNT(*) OVER () as total_network_size
+      FROM affiliate_network
+      ORDER BY level, affiliate_id, client_id
+    `;
+
+    // Query para estatísticas da rede
+    const networkStatsQuery = `
+      WITH RECURSIVE affiliate_network AS (
+        SELECT 
+          user_afil as affiliate_id,
+          user_id as client_id,
+          0 as level
+        FROM tracked 
+        WHERE user_afil = $1 
+          AND user_id IS NOT NULL
+          AND tracked_type_id = 1
+        
+        UNION ALL
+        
+        SELECT 
+          t.user_afil as affiliate_id,
+          t.user_id as client_id,
+          an.level + 1 as level
+        FROM tracked t
+        INNER JOIN affiliate_network an ON t.user_afil = an.client_id
+        WHERE an.level < 5
+          AND t.user_id IS NOT NULL
+          AND t.tracked_type_id = 1
+      )
+      SELECT 
+        level,
+        COUNT(DISTINCT client_id) as clients_count,
+        COUNT(DISTINCT affiliate_id) as affiliates_count
+      FROM affiliate_network
+      GROUP BY level
+      ORDER BY level
+    `;
+
+    const [networkResult, statsResult] = await Promise.all([
+      pool.query(mlmNetworkQuery, [affiliateId]),
+      pool.query(networkStatsQuery, [affiliateId])
+    ]);
+
+    // Processar dados por nível
+    const networkByLevel = {};
+    networkResult.rows.forEach(row => {
+      if (!networkByLevel[row.level]) {
+        networkByLevel[row.level] = [];
+      }
+      networkByLevel[row.level].push({
+        affiliate_id: row.affiliate_id,
+        client_id: row.client_id
+      });
+    });
+
+    // Processar estatísticas
+    const levelStats = {};
+    statsResult.rows.forEach(row => {
+      levelStats[`nivel_${row.level}`] = {
+        level: row.level,
+        clients_count: parseInt(row.clients_count),
+        affiliates_count: parseInt(row.affiliates_count)
+      };
+    });
+
+    res.json({
+      status: 'success',
+      affiliate_id: affiliateId,
+      network: networkByLevel,
+      stats: levelStats,
+      total_network_size: networkResult.rows.length,
+      max_levels: Math.max(...statsResult.rows.map(r => r.level))
+    });
+
+  } catch (error) {
+    console.error('Erro ao buscar rede MLM:', error);
+    res.status(500).json({
+      status: 'error',
+      message: 'Erro ao buscar rede MLM',
       error: error.message
     });
   }
