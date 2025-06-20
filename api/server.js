@@ -222,8 +222,7 @@ app.get('/api/affiliates/mlm-levels-corrected', async (req, res) => {
       SELECT 
         user_afil as affiliate_id,
         user_id as referred_user_id,
-        tracked_type_id,
-        created_at
+        tracked_type_id
       FROM tracked 
       WHERE tracked_type_id = 1 
         AND user_afil IS NOT NULL 
