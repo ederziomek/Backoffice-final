@@ -1431,23 +1431,3 @@ app.get('/api/database/tracked-info', async (req, res) => {
   }
 });
 
-
-// Rota catch-all para servir o React app - DEVE SER A ÚLTIMA ROTA
-app.get('*', (req, res) => {
-  res.sendFile(path.join(__dirname, '../dist/index.html'));
-});
-
-// Iniciar servidor
-const PORT = process.env.PORT || 5001;
-app.listen(PORT, '0.0.0.0', () => {
-  console.log(`🚀 Servidor rodando na porta ${PORT}`);
-  console.log(`📊 API disponível em http://localhost:${PORT}/api`);
-  console.log(`🔗 Health check: http://localhost:${PORT}/api/health`);
-  console.log(`👥 Afiliados: http://localhost:${PORT}/api/affiliates`);
-  console.log(`📈 Estatísticas: http://localhost:${PORT}/api/affiliates/stats`);
-  console.log(`🌐 MLM Levels: http://localhost:${PORT}/api/affiliates/mlm-levels`);
-  console.log(`🔍 Database Info: http://localhost:${PORT}/api/database/tracked-info`);
-});
-
-module.exports = app;
-
