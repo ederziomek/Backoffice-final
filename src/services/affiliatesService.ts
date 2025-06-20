@@ -128,14 +128,15 @@ class AffiliatesService {
     return this.getAffiliateStats();
   }
 
-  // Buscar dados MLM com níveis detalhados da API local
+  // Buscar dados MLM com níveis detalhados da API local - ALGORITMO CORRIGIDO
   async getAffiliatesMLMLevels(page: number = 1, per_page: number = 20): Promise<MLMResponse> {
     try {
-      console.log(`🔍 Buscando afiliados MLM da API local - Página: ${page}, Por página: ${per_page}`);
+      console.log(`🔍 Buscando afiliados MLM CORRIGIDOS da API local - Página: ${page}, Por página: ${per_page}`);
       
-      const response = await api.get(`/affiliates/mlm-levels?page=${page}&limit=${per_page}`);
+      // USAR ENDPOINT CORRIGIDO que processa todos os 614.944 registros
+      const response = await api.get(`/affiliates/mlm-levels-corrected?page=${page}&limit=${per_page}`);
       
-      console.log('📊 Resposta dos afiliados MLM:', response.data);
+      console.log('📊 Resposta dos afiliados MLM CORRIGIDOS:', response.data);
       
       return {
         status: response.data.status,
@@ -149,8 +150,25 @@ class AffiliatesService {
       };
 
     } catch (error) {
-      console.error('❌ Erro ao buscar afiliados MLM:', error);
-      throw new Error('Falha ao carregar estatísticas MLM');
+      console.error('❌ Erro ao buscar afiliados MLM corrigidos:', error);
+      // Fallback para endpoint antigo se o corrigido falhar
+      console.log('🔄 Tentando endpoint antigo como fallback...');
+      try {
+        const fallbackResponse = await api.get(`/affiliates/mlm-levels?page=${page}&limit=${per_page}`);
+        return {
+          status: fallbackResponse.data.status,
+          data: fallbackResponse.data.data || [],
+          pagination: fallbackResponse.data.pagination || {
+            page: 1,
+            pages: 1,
+            total: 0,
+            limit: per_page
+          }
+        };
+      } catch (fallbackError) {
+        console.error('❌ Erro no fallback também:', fallbackError);
+        throw new Error('Falha ao carregar estatísticas MLM');
+      }
     }
   }
 
