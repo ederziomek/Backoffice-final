@@ -959,11 +959,6 @@ app.get('/api/affiliates/mlm-levels', async (req, res) => {
   }
 });
 
-// Fallback para React Router - deve vir DEPOIS das rotas da API
-app.get('*', (req, res) => {
-  res.sendFile(path.join(__dirname, '../dist/index.html'));
-});
-
 // Middleware de tratamento de erros
 app.use((err, req, res, next) => {
   console.error('Erro não tratado:', err);
@@ -971,11 +966,6 @@ app.use((err, req, res, next) => {
     status: 'error',
     message: 'Erro interno do servidor'
   });
-});
-
-// Rota catch-all para servir o React app
-app.get('*', (req, res) => {
-  res.sendFile(path.join(__dirname, '../dist/index.html'));
 });
 
 // Iniciar servidor
@@ -1153,12 +1143,6 @@ app.get('/api/database/test', async (req, res) => {
       error: error.message
     });
   }
-});
-
-
-// Rota catch-all para servir o React app
-app.get('*', (req, res) => {
-  res.sendFile(path.join(__dirname, '../dist/index.html'));
 });
 
 
