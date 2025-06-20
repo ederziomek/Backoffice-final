@@ -53,6 +53,16 @@ app.get('/api/health', async (req, res) => {
   }
 });
 
+// Endpoint de teste simples para verificar roteamento
+app.get('/api/test-simple', (req, res) => {
+  res.json({
+    status: 'success',
+    message: 'Endpoint de teste funcionando',
+    timestamp: new Date().toISOString(),
+    path: req.path
+  });
+});
+
 // Rota para buscar afiliados com dados 100% reais
 app.get('/api/affiliates', async (req, res) => {
   try {
@@ -1333,9 +1343,7 @@ app.get('/api/database/tracked-info', async (req, res) => {
       SELECT 
         COUNT(*) as total_records,
         COUNT(DISTINCT user_afil) as unique_affiliates,
-        COUNT(DISTINCT user_id) as unique_users,
-        MIN(created_at) as oldest_record,
-        MAX(created_at) as newest_record
+        COUNT(DISTINCT user_id) as unique_users
       FROM tracked 
       WHERE tracked_type_id = 1
     `;
@@ -1358,13 +1366,12 @@ app.get('/api/database/tracked-info', async (req, res) => {
         id,
         user_afil,
         user_id,
-        tracked_type_id,
-        created_at
+        tracked_type_id
       FROM tracked 
       WHERE tracked_type_id = 1 
         AND user_afil IS NOT NULL 
         AND user_id IS NOT NULL
-      ORDER BY created_at DESC
+      ORDER BY id DESC
       LIMIT 10
     `;
 
@@ -1387,9 +1394,7 @@ app.get('/api/database/tracked-info', async (req, res) => {
       database_info: {
         total_records: parseInt(totalData.total_records),
         unique_affiliates: parseInt(totalData.unique_affiliates),
-        unique_users: parseInt(totalData.unique_users),
-        oldest_record: totalData.oldest_record,
-        newest_record: totalData.newest_record
+        unique_users: parseInt(totalData.unique_users)
       },
       valid_data: {
         valid_records: parseInt(validData.valid_records),
