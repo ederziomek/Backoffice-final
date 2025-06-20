@@ -160,6 +160,20 @@ class AffiliatesService {
       throw new Error('Falha ao carregar rede do afiliado');
     }
   }
+  // Testar conexão com a API
+  async testConnection(): Promise<void> {
+    try {
+      console.log('🔗 Testando conexão com API local');
+      
+      const response = await api.get('/health');
+      
+      console.log('✅ Conexão com API funcionando:', response.data);
+
+    } catch (error) {
+      console.error('❌ Erro na conexão com API:', error);
+      throw new Error('Falha na conexão com o servidor');
+    }
+  }
 }
 
 export const affiliatesService = new AffiliatesService();
