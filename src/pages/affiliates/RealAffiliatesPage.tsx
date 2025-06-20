@@ -10,11 +10,13 @@ interface MLMAffiliate {
   n3: number;
   n4: number;
   n5: number;
+  name?: string;
+  last_calculated?: string;
 }
 
 interface MLMResponse {
   status: string;
-  data: MLMAffiliate[];
+  data: any[]; // Usar any para flexibilidade
   pagination: {
     page: number;
     pages: number;
@@ -44,7 +46,20 @@ const RealAffiliatesPage: React.FC = () => {
       console.log('📊 Dados MLM recebidos:', response);
       
       if (response.status === 'success') {
-        setAffiliates(response.data || []);
+        // Mapear dados do microserviço para o formato esperado
+        const mappedData = response.data.map(item => ({
+          affiliate_id: item.affiliate_id,
+          total: item.total_network,
+          n1: item.n1_count,
+          n2: item.n2_count,
+          n3: item.n3_count,
+          n4: item.n4_count,
+          n5: item.n5_count,
+          name: item.name,
+          last_calculated: item.last_calculated
+        }));
+        
+        setAffiliates(mappedData);
         setTotalPages(response.pagination?.pages || 1);
         setCurrentPage(response.pagination?.page || 1);
         setTotalAffiliates(response.pagination?.total || 0);

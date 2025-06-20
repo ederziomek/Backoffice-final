@@ -195,16 +195,14 @@ app.get('/api/affiliates/:id', async (req, res) => {
 
     const detailsQuery = `
       SELECT 
-        affiliate_id,
-        COUNT(DISTINCT client_id) as total_clients,
-        MIN(level) as min_level,
-        MAX(level) as max_level,
-        COUNT(*) as total_records,
-        MIN(created_at) as first_client,
-        MAX(created_at) as last_client
+        user_afil as affiliate_id,
+        COUNT(DISTINCT user_id) as total_clients,
+        1 as min_level,
+        1 as max_level,
+        COUNT(*) as total_records
       FROM tracked 
-      WHERE affiliate_id = $1 AND client_id IS NOT NULL
-      GROUP BY affiliate_id
+      WHERE user_afil = $1 AND user_id IS NOT NULL
+      GROUP BY user_afil
     `;
 
     const result = await pool.query(detailsQuery, [affiliateId]);
@@ -238,12 +236,11 @@ app.get('/api/affiliates/:id/network', async (req, res) => {
 
     const networkQuery = `
       SELECT 
-        client_id,
-        level,
-        created_at
+        user_id as client_id,
+        1 as level
       FROM tracked 
-      WHERE affiliate_id = $1 AND client_id IS NOT NULL
-      ORDER BY level, created_at
+      WHERE user_afil = $1 AND user_id IS NOT NULL
+      ORDER BY user_id
     `;
 
     const result = await pool.query(networkQuery, [affiliateId]);
@@ -403,7 +400,7 @@ app.get('/api/affiliates/mlm-levels', async (req, res) => {
     // Query para buscar afiliados e calcular níveis MLM
     const affiliatesMLMQuery = `
       WITH RECURSIVE affiliate_levels AS (
-        -- Nível 0: Afiliados principais
+        -- Nível 0: Afiliados principais (indicações diretas)
         SELECT 
           t.user_afil as affiliate_id,
           t.user_id as client_id,
@@ -412,7 +409,7 @@ app.get('/api/affiliates/mlm-levels', async (req, res) => {
         FROM tracked t
         WHERE t.user_afil IS NOT NULL 
           AND t.user_id IS NOT NULL
-          AND t.tracked_type_id = '1'
+          AND t.tracked_type_id = 1
         
         UNION ALL
         
@@ -426,7 +423,7 @@ app.get('/api/affiliates/mlm-levels', async (req, res) => {
         INNER JOIN affiliate_levels al ON t.user_afil = al.client_id
         WHERE al.level < 5
           AND t.user_id IS NOT NULL
-          AND t.tracked_type_id = '1'
+          AND t.tracked_type_id = 1
           AND NOT (t.user_afil = ANY(al.path))
       ),
       affiliate_stats AS (
@@ -464,7 +461,7 @@ app.get('/api/affiliates/mlm-levels', async (req, res) => {
       FROM tracked 
       WHERE user_afil IS NOT NULL 
         AND user_id IS NOT NULL
-        AND tracked_type_id = '1'
+        AND tracked_type_id = 1
     `;
 
     const [affiliatesResult, countResult] = await Promise.all([
