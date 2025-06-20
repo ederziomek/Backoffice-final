@@ -177,6 +177,23 @@ class AffiliatesService {
       throw new Error('Falha ao carregar rede do afiliado');
     }
   }
+  // Buscar afiliados com níveis MLM detalhados
+  async getAffiliatesMLMLevels(page: number = 1, per_page: number = 20): Promise<any> {
+    try {
+      console.log(`🔍 Buscando afiliados com níveis MLM - Página: ${page}, Por página: ${per_page}`);
+      
+      const response = await api.get(`/affiliates/mlm-levels?page=${page}&limit=${per_page}`);
+      
+      console.log('📊 Resposta dos níveis MLM:', response.data);
+      
+      return response.data;
+
+    } catch (error) {
+      console.error('❌ Erro ao buscar níveis MLM:', error);
+      throw new Error('Falha ao carregar níveis MLM');
+    }
+  }
+
   // Testar conexão com a API
   async testConnection(): Promise<void> {
     try {

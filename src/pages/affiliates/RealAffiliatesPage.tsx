@@ -1,51 +1,59 @@
 import React, { useState, useEffect } from 'react';
-import { Users, Network, TrendingUp, Activity } from 'lucide-react';
-import { affiliatesService, Affiliate, AffiliateStats } from '@/services/affiliatesService';
+import { Users, Network, TrendingUp, Activity, RefreshCw } from 'lucide-react';
+import { affiliatesService } from '@/services/affiliatesService';
+
+interface MLMAffiliate {
+  affiliate_id: number;
+  total: number;
+  n1: number;
+  n2: number;
+  n3: number;
+  n4: number;
+  n5: number;
+}
+
+interface MLMResponse {
+  status: string;
+  data: MLMAffiliate[];
+  pagination: {
+    page: number;
+    pages: number;
+    total: number;
+    limit: number;
+  };
+}
 
 const RealAffiliatesPage: React.FC = () => {
-  const [affiliates, setAffiliates] = useState<Affiliate[]>([]);
-  const [stats, setStats] = useState<AffiliateStats | null>(null);
+  const [affiliates, setAffiliates] = useState<MLMAffiliate[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [currentPage, setCurrentPage] = useState(1);
   const [totalPages, setTotalPages] = useState(1);
+  const [totalAffiliates, setTotalAffiliates] = useState(0);
   const limit = 20;
 
-  const fetchAffiliates = async (page: number = 1) => {
+  const fetchMLMAffiliates = async (page: number = 1) => {
     try {
       setLoading(true);
       setError(null);
       
-      console.log(`🔍 Buscando afiliados - Página: ${page}`);
+      console.log(`🔍 Buscando afiliados MLM - Página: ${page}`);
       
-      const response = await affiliatesService.getAffiliates(page, limit);
+      const response: MLMResponse = await affiliatesService.getAffiliatesMLMLevels(page, limit);
       
-      console.log('📊 Dados recebidos:', response);
+      console.log('📊 Dados MLM recebidos:', response);
       
-      setAffiliates(response.affiliates || []);
-      setTotalPages(response.pagination?.pages || 1);
-      setCurrentPage(response.pagination?.page || 1);
+      if (response.status === 'success') {
+        setAffiliates(response.data || []);
+        setTotalPages(response.pagination?.pages || 1);
+        setCurrentPage(response.pagination?.page || 1);
+        setTotalAffiliates(response.pagination?.total || 0);
+      }
     } catch (err) {
-      console.error('❌ Erro ao buscar afiliados:', err);
+      console.error('❌ Erro ao buscar afiliados MLM:', err);
       setError(err instanceof Error ? err.message : 'Erro de conexão com o servidor');
     } finally {
       setLoading(false);
-    }
-  };
-
-  const fetchStats = async () => {
-    try {
-      console.log('📊 Buscando estatísticas...');
-      
-      const response = await affiliatesService.getStats();
-      
-      console.log('📈 Estatísticas recebidas:', response);
-      
-      if (response.status === 'success') {
-        setStats(response.data);
-      }
-    } catch (err) {
-      console.error('❌ Erro ao carregar estatísticas:', err);
     }
   };
 
@@ -62,32 +70,26 @@ const RealAffiliatesPage: React.FC = () => {
 
   useEffect(() => {
     testConnection();
-    fetchAffiliates(1);
-    fetchStats();
+    fetchMLMAffiliates(1);
   }, []);
 
   const handlePageChange = (page: number) => {
     if (page >= 1 && page <= totalPages) {
-      fetchAffiliates(page);
+      fetchMLMAffiliates(page);
     }
   };
 
   const handleRefresh = () => {
-    fetchAffiliates(currentPage);
-    fetchStats();
+    fetchMLMAffiliates(currentPage);
   };
 
-  if (loading && !affiliates.length) {
+  if (loading) {
     return (
-      <div className="space-y-6">
-        <div>
-          <h1 className="text-3xl font-bold text-branco mb-2">Afiliados da Operação</h1>
-          <p className="text-gray-400 mb-6">Dados reais da tabela tracked - Rede MLM</p>
-        </div>
-        <div className="flex items-center justify-center py-12">
-          <div className="text-center">
-            <Activity className="w-8 h-8 text-azul-ciano animate-spin mx-auto mb-4" />
-            <p className="text-gray-400">Carregando dados dos afiliados...</p>
+      <div className="min-h-screen bg-gray-900 text-white p-6">
+        <div className="max-w-7xl mx-auto">
+          <div className="flex items-center justify-center h-64">
+            <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-cyan-400"></div>
+            <span className="ml-3 text-lg">Carregando dados reais dos afiliados...</span>
           </div>
         </div>
       </div>
@@ -95,174 +97,199 @@ const RealAffiliatesPage: React.FC = () => {
   }
 
   return (
-    <div className="space-y-6">
-      {/* Header */}
-      <div className="flex justify-between items-center">
-        <div>
-          <h1 className="text-3xl font-bold text-branco mb-2">Afiliados da Operação</h1>
-          <p className="text-gray-400">Dados reais da tabela tracked - Apenas afiliados com clientes na rede MLM</p>
+    <div className="min-h-screen bg-gray-900 text-white p-6">
+      <div className="max-w-7xl mx-auto">
+        {/* Header */}
+        <div className="mb-8">
+          <div className="flex items-center justify-between">
+            <div>
+              <h1 className="text-3xl font-bold text-white mb-2">Afiliados da Operação</h1>
+              <p className="text-gray-400">
+                Dados reais da tabela tracked - Rede MLM até 5 níveis
+              </p>
+            </div>
+            <button
+              onClick={handleRefresh}
+              disabled={loading}
+              className="flex items-center gap-2 bg-cyan-600 hover:bg-cyan-700 disabled:opacity-50 px-4 py-2 rounded-lg transition-colors"
+            >
+              <RefreshCw className={`w-4 h-4 ${loading ? 'animate-spin' : ''}`} />
+              Atualizar
+            </button>
+          </div>
         </div>
-        <button
-          onClick={handleRefresh}
-          className="bg-azul-ciano text-cinza-escuro px-4 py-2 rounded-lg hover:bg-azul-ciano/80 flex items-center space-x-2 font-medium"
-        >
-          <Activity className="w-4 h-4" />
-          <span>Atualizar</span>
-        </button>
-      </div>
 
-      {/* Stats Cards */}
-      {stats && (
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-          <div className="bg-cinza-claro p-6 rounded-lg border border-cinza-medio">
+        {/* Stats Cards */}
+        <div className="grid grid-cols-1 md:grid-cols-4 gap-6 mb-8">
+          <div className="bg-gray-800 rounded-lg p-6 border border-gray-700">
             <div className="flex items-center justify-between">
               <div>
                 <p className="text-gray-400 text-sm">Total de Afiliados</p>
-                <p className="text-2xl font-bold text-branco">{stats.total_affiliates.toLocaleString()}</p>
-                <p className="text-xs text-gray-500 mt-1">Afiliados únicos com clientes</p>
+                <p className="text-2xl font-bold text-white">{totalAffiliates.toLocaleString()}</p>
+                <p className="text-xs text-gray-500">Afiliados únicos com rede</p>
               </div>
-              <Users className="w-8 h-8 text-azul-ciano" />
+              <Users className="w-8 h-8 text-cyan-400" />
             </div>
           </div>
 
-          <div className="bg-cinza-claro p-6 rounded-lg border border-cinza-medio">
+          <div className="bg-gray-800 rounded-lg p-6 border border-gray-700">
             <div className="flex items-center justify-between">
               <div>
-                <p className="text-gray-400 text-sm">Registros de Tracking</p>
-                <p className="text-2xl font-bold text-branco">{stats.total_tracking_records.toLocaleString()}</p>
-                <p className="text-xs text-gray-500 mt-1">Total de vínculos afiliado-cliente</p>
+                <p className="text-gray-400 text-sm">Página Atual</p>
+                <p className="text-2xl font-bold text-white">{currentPage}</p>
+                <p className="text-xs text-gray-500">de {totalPages} páginas</p>
               </div>
               <Network className="w-8 h-8 text-green-400" />
             </div>
           </div>
 
-          <div className="bg-cinza-claro p-6 rounded-lg border border-cinza-medio">
+          <div className="bg-gray-800 rounded-lg p-6 border border-gray-700">
             <div className="flex items-center justify-between">
               <div>
-                <p className="text-gray-400 text-sm">Top Afiliado</p>
-                <p className="text-2xl font-bold text-branco">
-                  {stats.top_affiliates && stats.top_affiliates.length > 0 ? stats.top_affiliates[0].client_count : 0}
-                </p>
-                <p className="text-xs text-gray-500 mt-1">
-                  {stats.top_affiliates && stats.top_affiliates.length > 0 ? `ID: ${stats.top_affiliates[0].affiliate_id}` : 'Nenhum dado'}
-                </p>
+                <p className="text-gray-400 text-sm">Registros por Página</p>
+                <p className="text-2xl font-bold text-white">{limit}</p>
+                <p className="text-xs text-gray-500">afiliados exibidos</p>
               </div>
               <TrendingUp className="w-8 h-8 text-yellow-400" />
             </div>
           </div>
-        </div>
-      )}
 
-      {/* Error Message */}
-      {error && (
-        <div className="bg-red-900/20 border border-red-500 text-red-400 px-4 py-3 rounded-lg">
-          <p>{error}</p>
-        </div>
-      )}
-
-      {/* Affiliates Table */}
-      <div className="bg-cinza-claro rounded-lg border border-cinza-medio overflow-hidden">
-        <div className="px-6 py-4 border-b border-cinza-medio">
-          <h3 className="text-lg font-semibold text-branco">Lista de Afiliados</h3>
-          <p className="text-sm text-gray-400">Afiliados com clientes em sua rede MLM</p>
-        </div>
-
-        {affiliates.length === 0 ? (
-          <div className="text-center py-12">
-            <Network className="w-12 h-12 text-gray-500 mx-auto mb-4" />
-            <p className="text-gray-400 text-lg mb-2">Nenhum afiliado encontrado</p>
-            <p className="text-gray-500 text-sm">Não há afiliados com clientes na rede MLM no momento</p>
+          <div className="bg-gray-800 rounded-lg p-6 border border-gray-700">
+            <div className="flex items-center justify-between">
+              <div>
+                <p className="text-gray-400 text-sm">Status</p>
+                <p className="text-2xl font-bold text-green-400">Online</p>
+                <p className="text-xs text-gray-500">Dados em tempo real</p>
+              </div>
+              <Activity className="w-8 h-8 text-red-400" />
+            </div>
           </div>
-        ) : (
-          <>
-            <div className="overflow-x-auto">
-              <table className="w-full">
-                <thead className="bg-cinza-medio">
-                  <tr>
-                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-300 uppercase tracking-wider">
-                      ID do Afiliado
-                    </th>
-                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-300 uppercase tracking-wider">
-                      Total de Clientes
-                    </th>
-                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-300 uppercase tracking-wider">
-                      Níveis
-                    </th>
-                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-300 uppercase tracking-wider">
-                      Status
-                    </th>
-                    <th className="px-6 py-3 text-right text-xs font-medium text-gray-300 uppercase tracking-wider">
-                      Ações
-                    </th>
-                  </tr>
-                </thead>
-                <tbody className="divide-y divide-cinza-medio">
-                  {affiliates.map((affiliate) => (
-                    <tr key={affiliate.affiliate_id} className="hover:bg-cinza-medio/50">
+        </div>
+
+        {/* Error Message */}
+        {error && (
+          <div className="bg-red-900/50 border border-red-500 rounded-lg p-4 mb-6">
+            <p className="text-red-200">{error}</p>
+          </div>
+        )}
+
+        {/* MLM Affiliates Table */}
+        <div className="bg-gray-800 rounded-lg border border-gray-700">
+          <div className="p-6 border-b border-gray-700">
+            <h2 className="text-xl font-semibold text-white mb-2">Rede MLM por Afiliado</h2>
+            <p className="text-gray-400">Distribuição de indicações por níveis da rede MLM</p>
+          </div>
+
+          <div className="overflow-x-auto">
+            <table className="w-full">
+              <thead className="bg-gray-700">
+                <tr>
+                  <th className="px-6 py-4 text-left text-xs font-medium text-gray-300 uppercase tracking-wider">
+                    ID Afiliado
+                  </th>
+                  <th className="px-6 py-4 text-left text-xs font-medium text-gray-300 uppercase tracking-wider">
+                    Total
+                  </th>
+                  <th className="px-6 py-4 text-left text-xs font-medium text-gray-300 uppercase tracking-wider">
+                    N1
+                  </th>
+                  <th className="px-6 py-4 text-left text-xs font-medium text-gray-300 uppercase tracking-wider">
+                    N2
+                  </th>
+                  <th className="px-6 py-4 text-left text-xs font-medium text-gray-300 uppercase tracking-wider">
+                    N3
+                  </th>
+                  <th className="px-6 py-4 text-left text-xs font-medium text-gray-300 uppercase tracking-wider">
+                    N4
+                  </th>
+                  <th className="px-6 py-4 text-left text-xs font-medium text-gray-300 uppercase tracking-wider">
+                    N5
+                  </th>
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-gray-700">
+                {affiliates.length > 0 ? (
+                  affiliates.map((affiliate, index) => (
+                    <tr key={affiliate.affiliate_id} className="hover:bg-gray-700/50 transition-colors">
                       <td className="px-6 py-4 whitespace-nowrap">
-                        <div className="text-sm font-medium text-branco">
+                        <div className="text-sm font-medium text-white">
                           {affiliate.affiliate_id}
                         </div>
                       </td>
                       <td className="px-6 py-4 whitespace-nowrap">
-                        <div className="text-sm text-branco">
-                          {affiliate.total_clients}
+                        <div className="text-sm font-bold text-cyan-400">
+                          {affiliate.total.toLocaleString()}
                         </div>
                       </td>
                       <td className="px-6 py-4 whitespace-nowrap">
-                        <div className="text-sm text-gray-400">
-                          {affiliate.min_level === affiliate.max_level 
-                            ? `Nível ${affiliate.min_level}`
-                            : `Níveis ${affiliate.min_level}-${affiliate.max_level}`
-                          }
+                        <div className="text-sm text-green-400">
+                          {affiliate.n1.toLocaleString()}
                         </div>
                       </td>
                       <td className="px-6 py-4 whitespace-nowrap">
-                        <span className="inline-flex px-2 py-1 text-xs font-semibold rounded-full bg-green-100 text-green-800">
-                          {affiliate.status}
-                        </span>
+                        <div className="text-sm text-blue-400">
+                          {affiliate.n2.toLocaleString()}
+                        </div>
                       </td>
-                      <td className="px-6 py-4 whitespace-nowrap text-right text-sm font-medium">
-                        <button className="text-azul-ciano hover:text-azul-ciano/80 mr-3">
-                          Ver Rede
-                        </button>
-                        <button className="text-gray-400 hover:text-gray-300">
-                          Detalhes
-                        </button>
+                      <td className="px-6 py-4 whitespace-nowrap">
+                        <div className="text-sm text-purple-400">
+                          {affiliate.n3.toLocaleString()}
+                        </div>
+                      </td>
+                      <td className="px-6 py-4 whitespace-nowrap">
+                        <div className="text-sm text-yellow-400">
+                          {affiliate.n4.toLocaleString()}
+                        </div>
+                      </td>
+                      <td className="px-6 py-4 whitespace-nowrap">
+                        <div className="text-sm text-red-400">
+                          {affiliate.n5.toLocaleString()}
+                        </div>
                       </td>
                     </tr>
-                  ))}
-                </tbody>
-              </table>
-            </div>
+                  ))
+                ) : (
+                  <tr>
+                    <td colSpan={7} className="px-6 py-12 text-center">
+                      <div className="flex flex-col items-center justify-center">
+                        <Network className="w-12 h-12 text-gray-500 mb-4" />
+                        <p className="text-gray-400 text-lg">Nenhum afiliado encontrado</p>
+                        <p className="text-gray-500 text-sm">
+                          Não há afiliados com clientes na rede MLM no momento
+                        </p>
+                      </div>
+                    </td>
+                  </tr>
+                )}
+              </tbody>
+            </table>
+          </div>
 
-            {/* Pagination */}
-            <div className="px-6 py-4 border-t border-cinza-medio flex items-center justify-between">
+          {/* Pagination */}
+          {totalPages > 1 && (
+            <div className="px-6 py-4 border-t border-gray-700 flex items-center justify-between">
               <div className="text-sm text-gray-400">
-                Página {currentPage} de {totalPages}
+                Página {currentPage} de {totalPages} ({totalAffiliates.toLocaleString()} afiliados total)
               </div>
-              <div className="flex items-center space-x-2">
+              <div className="flex gap-2">
                 <button
                   onClick={() => handlePageChange(currentPage - 1)}
-                  disabled={currentPage === 1}
-                  className="px-3 py-1 text-sm bg-cinza-medio text-gray-300 rounded hover:bg-cinza-escuro disabled:opacity-50 disabled:cursor-not-allowed"
+                  disabled={currentPage <= 1}
+                  className="px-3 py-1 bg-gray-700 hover:bg-gray-600 disabled:opacity-50 disabled:cursor-not-allowed rounded text-sm transition-colors"
                 >
                   Anterior
                 </button>
-                <span className="px-3 py-1 text-sm bg-azul-ciano text-cinza-escuro rounded">
-                  {currentPage}
-                </span>
                 <button
                   onClick={() => handlePageChange(currentPage + 1)}
-                  disabled={currentPage === totalPages}
-                  className="px-3 py-1 text-sm bg-cinza-medio text-gray-300 rounded hover:bg-cinza-escuro disabled:opacity-50 disabled:cursor-not-allowed"
+                  disabled={currentPage >= totalPages}
+                  className="px-3 py-1 bg-gray-700 hover:bg-gray-600 disabled:opacity-50 disabled:cursor-not-allowed rounded text-sm transition-colors"
                 >
-                  Próximo
+                  Próxima
                 </button>
               </div>
             </div>
-          </>
-        )}
+          )}
+        </div>
       </div>
     </div>
   );

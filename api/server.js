@@ -378,6 +378,111 @@ app.get('/api/affiliates/:id/mlm-network', async (req, res) => {
   }
 });
 
+// Nova rota para lista de afiliados com níveis MLM detalhados
+app.get('/api/affiliates/mlm-levels', async (req, res) => {
+  try {
+    const page = parseInt(req.query.page) || 1;
+    const limit = parseInt(req.query.limit) || 20;
+    const offset = (page - 1) * limit;
+
+    console.log(`🔍 Buscando afiliados com níveis MLM - Página: ${page}`);
+
+    // Query para buscar afiliados e calcular níveis MLM
+    const affiliatesMLMQuery = `
+      WITH RECURSIVE affiliate_levels AS (
+        -- Nível 0: Afiliados principais
+        SELECT 
+          t.user_afil as affiliate_id,
+          t.user_id as client_id,
+          0 as level,
+          ARRAY[t.user_afil] as path
+        FROM tracked t
+        WHERE t.user_afil IS NOT NULL 
+          AND t.user_id IS NOT NULL
+          AND t.tracked_type_id = 1
+        
+        UNION ALL
+        
+        -- Níveis 1-5: Clientes que se tornaram afiliados
+        SELECT 
+          t.user_afil as affiliate_id,
+          t.user_id as client_id,
+          al.level + 1 as level,
+          al.path || t.user_afil as path
+        FROM tracked t
+        INNER JOIN affiliate_levels al ON t.user_afil = al.client_id
+        WHERE al.level < 5
+          AND t.user_id IS NOT NULL
+          AND t.tracked_type_id = 1
+          AND NOT (t.user_afil = ANY(al.path))
+      ),
+      affiliate_stats AS (
+        SELECT 
+          affiliate_id,
+          COUNT(CASE WHEN level = 0 THEN 1 END) as total_direct,
+          COUNT(CASE WHEN level = 1 THEN 1 END) as n1,
+          COUNT(CASE WHEN level = 2 THEN 1 END) as n2,
+          COUNT(CASE WHEN level = 3 THEN 1 END) as n3,
+          COUNT(CASE WHEN level = 4 THEN 1 END) as n4,
+          COUNT(CASE WHEN level = 5 THEN 1 END) as n5,
+          COUNT(*) as total_network
+        FROM affiliate_levels
+        GROUP BY affiliate_id
+      )
+      SELECT 
+        affiliate_id,
+        total_direct + n1 + n2 + n3 + n4 + n5 as total,
+        n1,
+        n2,
+        n3,
+        n4,
+        n5
+      FROM affiliate_stats
+      WHERE total_direct > 0
+      ORDER BY total DESC
+      LIMIT $1 OFFSET $2
+    `;
+
+    // Query para contar total de afiliados
+    const countQuery = `
+      SELECT COUNT(DISTINCT user_afil) as total
+      FROM tracked 
+      WHERE user_afil IS NOT NULL 
+        AND user_id IS NOT NULL
+        AND tracked_type_id = 1
+    `;
+
+    const [affiliatesResult, countResult] = await Promise.all([
+      pool.query(affiliatesMLMQuery, [limit, offset]),
+      pool.query(countQuery)
+    ]);
+
+    const total = parseInt(countResult.rows[0].total);
+    const totalPages = Math.ceil(total / limit);
+
+    console.log(`📊 Encontrados ${affiliatesResult.rows.length} afiliados com níveis MLM`);
+
+    res.json({
+      status: 'success',
+      data: affiliatesResult.rows,
+      pagination: {
+        page,
+        pages: totalPages,
+        total,
+        limit
+      }
+    });
+
+  } catch (error) {
+    console.error('❌ Erro ao buscar afiliados com níveis MLM:', error);
+    res.status(500).json({
+      status: 'error',
+      message: 'Erro ao buscar afiliados com níveis MLM',
+      error: error.message
+    });
+  }
+});
+
 // Fallback para React Router - deve vir DEPOIS das rotas da API
 app.get('*', (req, res) => {
   res.sendFile(path.join(__dirname, '../dist/index.html'));
