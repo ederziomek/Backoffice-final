@@ -120,13 +120,13 @@ const RealAffiliatesPage: React.FC = () => {
         </div>
 
         {/* Stats Cards */}
-        <div className="grid grid-cols-1 md:grid-cols-4 gap-6 mb-8">
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-6 mb-8">
           <div className="bg-gray-800 rounded-lg p-6 border border-gray-700">
             <div className="flex items-center justify-between">
               <div>
-                <p className="text-gray-400 text-sm">Total de Afiliados</p>
+                <p className="text-gray-400 text-sm">Afiliados únicos</p>
                 <p className="text-2xl font-bold text-white">{totalAffiliates.toLocaleString()}</p>
-                <p className="text-xs text-gray-500">Afiliados únicos com rede</p>
+                <p className="text-xs text-gray-500">Total de afiliados com rede</p>
               </div>
               <Users className="w-8 h-8 text-cyan-400" />
             </div>
@@ -135,33 +135,13 @@ const RealAffiliatesPage: React.FC = () => {
           <div className="bg-gray-800 rounded-lg p-6 border border-gray-700">
             <div className="flex items-center justify-between">
               <div>
-                <p className="text-gray-400 text-sm">Página Atual</p>
-                <p className="text-2xl font-bold text-white">{currentPage}</p>
-                <p className="text-xs text-gray-500">de {totalPages} páginas</p>
+                <p className="text-gray-400 text-sm">Quantidade de indicações</p>
+                <p className="text-2xl font-bold text-white">
+                  {affiliates.reduce((total, affiliate) => total + affiliate.total, 0).toLocaleString()}
+                </p>
+                <p className="text-xs text-gray-500">Total em todos os níveis</p>
               </div>
               <Network className="w-8 h-8 text-green-400" />
-            </div>
-          </div>
-
-          <div className="bg-gray-800 rounded-lg p-6 border border-gray-700">
-            <div className="flex items-center justify-between">
-              <div>
-                <p className="text-gray-400 text-sm">Registros por Página</p>
-                <p className="text-2xl font-bold text-white">{limit}</p>
-                <p className="text-xs text-gray-500">afiliados exibidos</p>
-              </div>
-              <TrendingUp className="w-8 h-8 text-yellow-400" />
-            </div>
-          </div>
-
-          <div className="bg-gray-800 rounded-lg p-6 border border-gray-700">
-            <div className="flex items-center justify-between">
-              <div>
-                <p className="text-gray-400 text-sm">Status</p>
-                <p className="text-2xl font-bold text-green-400">Online</p>
-                <p className="text-xs text-gray-500">Dados em tempo real</p>
-              </div>
-              <Activity className="w-8 h-8 text-red-400" />
             </div>
           </div>
         </div>
@@ -185,7 +165,7 @@ const RealAffiliatesPage: React.FC = () => {
               <thead className="bg-gray-700">
                 <tr>
                   <th className="px-6 py-4 text-left text-xs font-medium text-gray-300 uppercase tracking-wider">
-                    ID Afiliado
+                    ID
                   </th>
                   <th className="px-6 py-4 text-left text-xs font-medium text-gray-300 uppercase tracking-wider">
                     Total

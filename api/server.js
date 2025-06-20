@@ -52,6 +52,15 @@ app.get('/api/health', async (req, res) => {
   }
 });
 
+// Rota de health check
+app.get('/api/health', (req, res) => {
+  res.json({
+    status: 'success',
+    message: 'API funcionando',
+    timestamp: new Date().toISOString()
+  });
+});
+
 // Rota para buscar afiliados com dados 100% reais
 app.get('/api/affiliates', async (req, res) => {
   try {
@@ -385,7 +394,11 @@ app.get('/api/affiliates/mlm-levels', async (req, res) => {
     const limit = parseInt(req.query.limit) || 20;
     const offset = (page - 1) * limit;
 
-    console.log(`🔍 Buscando afiliados com níveis MLM - Página: ${page}`);
+    console.log(`🔍 Buscando afiliados com níveis MLM - Página: ${page}, Limit: ${limit}, Offset: ${offset}`);
+
+    // Testar conexão com banco primeiro
+    await pool.query('SELECT 1');
+    console.log('✅ Conexão com banco PostgreSQL OK');
 
     // Query para buscar afiliados e calcular níveis MLM
     const affiliatesMLMQuery = `
@@ -443,6 +456,8 @@ app.get('/api/affiliates/mlm-levels', async (req, res) => {
       LIMIT $1 OFFSET $2
     `;
 
+    console.log('🔄 Executando query MLM...');
+
     // Query para contar total de afiliados
     const countQuery = `
       SELECT COUNT(DISTINCT user_afil) as total
@@ -460,7 +475,7 @@ app.get('/api/affiliates/mlm-levels', async (req, res) => {
     const total = parseInt(countResult.rows[0].total);
     const totalPages = Math.ceil(total / limit);
 
-    console.log(`📊 Encontrados ${affiliatesResult.rows.length} afiliados com níveis MLM`);
+    console.log(`📊 Query executada com sucesso! Encontrados ${affiliatesResult.rows.length} afiliados de ${total} total`);
 
     res.json({
       status: 'success',
@@ -474,11 +489,17 @@ app.get('/api/affiliates/mlm-levels', async (req, res) => {
     });
 
   } catch (error) {
-    console.error('❌ Erro ao buscar afiliados com níveis MLM:', error);
+    console.error('❌ Erro detalhado ao buscar afiliados MLM:', {
+      message: error.message,
+      stack: error.stack,
+      code: error.code
+    });
+    
     res.status(500).json({
       status: 'error',
       message: 'Erro ao buscar afiliados com níveis MLM',
-      error: error.message
+      error: error.message,
+      details: process.env.NODE_ENV === 'development' ? error.stack : undefined
     });
   }
 });
