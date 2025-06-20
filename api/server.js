@@ -892,6 +892,11 @@ app.use((err, req, res, next) => {
   });
 });
 
+// Rota catch-all para servir o React app
+app.get('*', (req, res) => {
+  res.sendFile(path.join(__dirname, '../dist/index.html'));
+});
+
 // Iniciar servidor
 const PORT = process.env.PORT || 5001;
 app.listen(PORT, '0.0.0.0', () => {
@@ -1068,4 +1073,11 @@ app.get('/api/database/test', async (req, res) => {
     });
   }
 });
+
+
+// Rota catch-all para servir o React app
+app.get('*', (req, res) => {
+  res.sendFile(path.join(__dirname, '../dist/index.html'));
+});
+
 
