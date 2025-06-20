@@ -81,7 +81,7 @@ export const affiliatesService = {
       const users = response.data.users || [];
       
       // Converter dados de usuários para formato de afiliados
-      const affiliates = users.map((user: any, index: number) => ({
+      const affiliates = users.map((user: any) => ({
         // Formato original esperado pela API
         id: `affiliate_${user.id}`,
         afiliado_id: user.id,
