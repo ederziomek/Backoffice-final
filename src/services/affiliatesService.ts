@@ -110,6 +110,23 @@ class AffiliatesService {
     }
   }
 
+  // Alias para compatibilidade com código existente
+  async getStats(): Promise<any> {
+    try {
+      console.log('📈 Buscando estatísticas (alias)');
+      
+      const response = await api.get('/affiliates/stats');
+      
+      console.log('📊 Estatísticas:', response.data);
+      
+      return response.data;
+
+    } catch (error) {
+      console.error('❌ Erro ao buscar estatísticas:', error);
+      throw new Error('Falha ao carregar estatísticas');
+    }
+  }
+
   // Buscar rede MLM até 5 níveis com dados 100% reais
   async getMLMNetwork(affiliateId: number): Promise<MLMNetwork> {
     try {
