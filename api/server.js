@@ -412,7 +412,7 @@ app.get('/api/affiliates/mlm-levels', async (req, res) => {
         FROM tracked t
         WHERE t.user_afil IS NOT NULL 
           AND t.user_id IS NOT NULL
-          AND t.tracked_type_id = 1
+          AND t.tracked_type_id = '1'
         
         UNION ALL
         
@@ -426,7 +426,7 @@ app.get('/api/affiliates/mlm-levels', async (req, res) => {
         INNER JOIN affiliate_levels al ON t.user_afil = al.client_id
         WHERE al.level < 5
           AND t.user_id IS NOT NULL
-          AND t.tracked_type_id = 1
+          AND t.tracked_type_id = '1'
           AND NOT (t.user_afil = ANY(al.path))
       ),
       affiliate_stats AS (
@@ -464,7 +464,7 @@ app.get('/api/affiliates/mlm-levels', async (req, res) => {
       FROM tracked 
       WHERE user_afil IS NOT NULL 
         AND user_id IS NOT NULL
-        AND tracked_type_id = 1
+        AND tracked_type_id = '1'
     `;
 
     const [affiliatesResult, countResult] = await Promise.all([
