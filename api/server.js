@@ -350,6 +350,87 @@ app.get('/api/affiliates/mlm-levels', async (req, res) => {
   }
 });
 
+// ALGORITMO MLM CORRIGIDO - Implementação conforme documentação
+// Busca TODOS os 614.944 registros e constrói hierarquia infinita
+
+// Nova rota para lista de afiliados com níveis MLM detalhados - ALGORITMO CORRIGIDO
+app.get('/api/affiliates/mlm-levels-corrected', async (req, res) => {
+  try {
+    const page = parseInt(req.query.page) || 1;
+    const limit = parseInt(req.query.limit) || 20;
+    const offset = (page - 1) * limit;
+
+    console.log(`🔍 Buscando afiliados com níveis MLM CORRIGIDOS - Página: ${page}, Limit: ${limit}, Offset: ${offset}`);
+
+    // Testar conexão com banco primeiro
+    await pool.query('SELECT 1');
+    console.log('✅ Conexão com banco PostgreSQL OK');
+
+    // ALGORITMO CORRIGIDO: Buscar TODOS os registros tracked primeiro
+    console.log('📊 Buscando TODOS os registros tracked...');
+    
+    const allTrackedQuery = `
+      SELECT 
+        user_afil as affiliate_id,
+        user_id as referred_user_id,
+        tracked_type_id,
+        created_at
+      FROM tracked 
+      WHERE tracked_type_id = 1 
+        AND user_afil IS NOT NULL 
+        AND user_id IS NOT NULL
+      ORDER BY user_afil, user_id
+    `;
+
+    const allTrackedResult = await pool.query(allTrackedQuery);
+    const allTrackedData = allTrackedResult.rows;
+    
+    console.log(`📈 Total de registros tracked encontrados: ${allTrackedData.length}`);
+
+    // Construir hierarquia infinita conforme documentação
+    const hierarchy = buildInfiniteHierarchy(allTrackedData);
+    
+    // Calcular estatísticas N1-N5 para cada afiliado
+    const affiliateStats = calculateN1ToN5Stats(hierarchy, allTrackedData);
+    
+    // Ordenar por total e paginar
+    const sortedAffiliates = Object.values(affiliateStats)
+      .sort((a, b) => b.total - a.total)
+      .slice(offset, offset + limit);
+
+    // Contar total de afiliados únicos
+    const totalAffiliates = Object.keys(affiliateStats).length;
+    const totalPages = Math.ceil(totalAffiliates / limit);
+
+    console.log(`✅ Processados ${totalAffiliates} afiliados únicos com hierarquia infinita`);
+    console.log(`📊 Total de indicações: ${Object.values(affiliateStats).reduce((sum, a) => sum + a.total, 0)}`);
+
+    res.json({
+      status: 'success',
+      data: sortedAffiliates,
+      pagination: {
+        page: page,
+        pages: totalPages,
+        total: totalAffiliates,
+        limit: limit
+      },
+      debug: {
+        total_tracked_records: allTrackedData.length,
+        total_affiliates: totalAffiliates,
+        algorithm: 'infinite_hierarchy_n1_to_n5'
+      }
+    });
+
+  } catch (error) {
+    console.error('❌ Erro ao buscar afiliados MLM:', error);
+    res.status(500).json({
+      status: 'error',
+      message: 'Erro ao buscar afiliados MLM',
+      error: error.message
+    });
+  }
+});
+
 // Rota para detalhes de um afiliado específico
 app.get('/api/affiliates/:id', async (req, res) => {
   try {
