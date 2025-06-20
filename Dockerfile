@@ -1,22 +1,18 @@
-# Multi-stage Dockerfile para React + Node.js API
-FROM node:18-alpine AS base
-
-# Instalar pnpm globalmente
-RUN npm install -g pnpm
+# Dockerfile otimizado para Railway
+FROM node:18-alpine
 
 # Instalar dependências do sistema
 RUN apk add --no-cache curl
 
-# Stage 1: Build do frontend React
-FROM base AS frontend-builder
+# Criar diretório de trabalho
 WORKDIR /app
 
-# Copiar arquivos de configuração do frontend
-COPY package*.json pnpm-lock.yaml ./
-COPY tsconfig*.json vite.config.ts tailwind.config.js postcss.config.js components.json ./
+# Primeiro, instalar e buildar o frontend
+COPY package*.json ./
+RUN npm install
 
-# Instalar dependências do frontend
-RUN pnpm install --frozen-lockfile
+# Copiar arquivos de configuração
+COPY tsconfig*.json vite.config.ts tailwind.config.js postcss.config.js components.json ./
 
 # Copiar código fonte do frontend
 COPY src/ ./src/
@@ -24,35 +20,21 @@ COPY public/ ./public/
 COPY index.html ./
 
 # Build do frontend
-RUN pnpm run build
+RUN npm run build
 
-# Stage 2: Setup da API Node.js
-FROM base AS api-setup
+# Agora configurar a API
 WORKDIR /app/api
-
-# Copiar arquivos de configuração da API
 COPY api/package*.json ./
+RUN npm install --only=production
 
-# Instalar dependências da API
-RUN npm ci --only=production
-
-# Stage 3: Imagem final
-FROM base AS final
+# Voltar para diretório principal e copiar API
 WORKDIR /app
-
-# Copiar build do frontend
-COPY --from=frontend-builder /app/dist ./dist
-
-# Copiar API e suas dependências
-COPY --from=api-setup /app/api/node_modules ./api/node_modules
 COPY api/ ./api/
 
 # Criar usuário não-root
 RUN addgroup -g 1001 -S nodejs && \
-    adduser -S appuser -u 1001
-
-# Ajustar permissões
-RUN chown -R appuser:nodejs /app
+    adduser -S appuser -u 1001 && \
+    chown -R appuser:nodejs /app
 
 # Mudar para usuário não-root
 USER appuser
@@ -64,6 +46,6 @@ EXPOSE 3000
 HEALTHCHECK --interval=30s --timeout=10s --start-period=60s --retries=3 \
   CMD curl -f http://localhost:3000/api/health || exit 1
 
-# Comando de inicialização da API (que também serve o frontend)
+# Comando de inicialização
 CMD ["node", "api/server.js"]
 
