@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { Users, Network, TrendingUp, Activity, RefreshCw } from 'lucide-react';
+import { Users, Network, RefreshCw } from 'lucide-react';
 import { affiliatesService } from '@/services/affiliatesService';
 
 interface MLMAffiliate {
