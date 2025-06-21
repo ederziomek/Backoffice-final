@@ -35,12 +35,16 @@ export interface Affiliate {
 
 export interface MLMAffiliate {
   affiliate_id: number;
+  registro: string;
   total: number;
   n1: number;
   n2: number;
   n3: number;
   n4: number;
   n5: number;
+  cpa_pago: number;
+  rev_pago: number;
+  total_pago: number;
 }
 
 export interface AffiliateStats {

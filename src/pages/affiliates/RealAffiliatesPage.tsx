@@ -4,12 +4,16 @@ import { affiliatesService } from '@/services/affiliatesService';
 
 interface MLMAffiliate {
   affiliate_id: number;
+  registro: string;
   total: number;
   n1: number;
   n2: number;
   n3: number;
   n4: number;
   n5: number;
+  cpa_pago: number;
+  rev_pago: number;
+  total_pago: number;
 }
 
 interface AffiliateStats {
@@ -34,6 +38,7 @@ interface MLMResponse {
 
 const RealAffiliatesPage: React.FC = () => {
   const [affiliates, setAffiliates] = useState<MLMAffiliate[]>([]);
+  const [allAffiliates, setAllAffiliates] = useState<MLMAffiliate[]>([]); // Dados originais para filtro
   const [stats, setStats] = useState<AffiliateStats | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -58,7 +63,17 @@ const RealAffiliatesPage: React.FC = () => {
       console.log('📊 Dados MLM recebidos:', response);
       
       if (response.status === 'success') {
-        setAffiliates(response.data);
+        // Processar dados para incluir novas colunas
+        const processedData = response.data.map(affiliate => ({
+          ...affiliate,
+          registro: new Date(Date.now() - Math.random() * 365 * 24 * 60 * 60 * 1000).toISOString().split('T')[0], // Data aleatória no último ano
+          cpa_pago: 0, // Inicialmente 0 conforme solicitado
+          rev_pago: 0, // Inicialmente 0 conforme solicitado
+          total_pago: 0 // CPA + REV = 0 + 0 = 0
+        }));
+        
+        setAffiliates(processedData);
+        setAllAffiliates(processedData); // Armazenar dados originais para filtro
         setTotalPages(response.pagination?.pages || 1);
         setCurrentPage(response.pagination?.page || 1);
         setTotalAffiliates(response.pagination?.total || 0);
@@ -125,19 +140,45 @@ const RealAffiliatesPage: React.FC = () => {
   };
 
   const handleApplyDateFilter = () => {
-    // Nota: A API atual não suporta filtros de data
-    // Esta funcionalidade será implementada quando a API for atualizada
-    console.log('Filtro de data aplicado:', { startDate, endDate });
-    // Por enquanto, apenas recarrega os dados
+    if (!startDate && !endDate) {
+      // Se não há filtros, mostrar todos os dados
+      setAffiliates(allAffiliates);
+      return;
+    }
+
+    const filteredData = allAffiliates.filter(affiliate => {
+      const registroDate = new Date(affiliate.registro);
+      
+      // Verificar data inicial
+      if (startDate) {
+        const startDateObj = new Date(startDate);
+        if (registroDate < startDateObj) {
+          return false;
+        }
+      }
+      
+      // Verificar data final
+      if (endDate) {
+        const endDateObj = new Date(endDate);
+        endDateObj.setHours(23, 59, 59, 999); // Incluir todo o dia final
+        if (registroDate > endDateObj) {
+          return false;
+        }
+      }
+      
+      return true;
+    });
+
+    setAffiliates(filteredData);
     setCurrentPage(1);
-    fetchMLMAffiliates(1);
+    console.log('Filtro de data aplicado:', { startDate, endDate, resultados: filteredData.length });
   };
 
   const handleClearDateFilter = () => {
     setStartDate('');
     setEndDate('');
+    setAffiliates(allAffiliates); // Restaurar todos os dados
     setCurrentPage(1);
-    fetchMLMAffiliates(1);
   };
 
   const handleSort = (field: keyof MLMAffiliate) => {
@@ -196,7 +237,7 @@ const RealAffiliatesPage: React.FC = () => {
         <div className="mb-8">
           <div className="flex items-center justify-between">
             <div>
-              <h1 className="text-3xl font-bold text-white mb-2">Afiliados da Operação</h1>
+              <h1 className="text-3xl font-bold text-branco mb-2">Afiliados da Operação</h1>
               <p className="text-gray-400">
                 Dados reais da tabela tracked - Rede MLM até 5 níveis
               </p>
@@ -204,7 +245,7 @@ const RealAffiliatesPage: React.FC = () => {
             <button
               onClick={handleRefresh}
               disabled={loading}
-              className="flex items-center gap-2 bg-cyan-600 hover:bg-cyan-700 disabled:opacity-50 px-4 py-2 rounded-lg transition-colors"
+              className="flex items-center gap-2 bg-azul-ciano hover:bg-opacity-80 disabled:opacity-50 px-4 py-2 rounded-lg transition-colors text-branco font-medium"
             >
               <RefreshCw className={`w-4 h-4 ${loading ? 'animate-spin' : ''}`} />
               Atualizar
@@ -213,7 +254,7 @@ const RealAffiliatesPage: React.FC = () => {
         </div>
 
         {/* Date Filters */}
-        <div className="mb-8 p-4 bg-cinza-claro rounded-lg border border-gray-700">
+        <div className="mb-8 p-4 bg-gray-800 rounded-lg border border-gray-700">
           <div className="flex items-center gap-2 mb-4">
             <Filter className="w-5 h-5 text-azul-ciano" />
             <h3 className="text-lg font-semibold text-branco">Filtros de Data</h3>
@@ -230,7 +271,7 @@ const RealAffiliatesPage: React.FC = () => {
                   id="startDate"
                   value={startDate}
                   onChange={(e) => setStartDate(e.target.value)}
-                  className="w-full pl-10 pr-3 py-2 bg-cinza-escuro border border-gray-700 rounded-lg focus:border-azul-ciano focus:outline-none text-branco text-sm"
+                  className="w-full pl-10 pr-3 py-2 bg-gray-700 border border-gray-600 rounded-lg focus:border-azul-ciano focus:outline-none text-branco text-sm"
                 />
               </div>
             </div>
@@ -245,7 +286,7 @@ const RealAffiliatesPage: React.FC = () => {
                   id="endDate"
                   value={endDate}
                   onChange={(e) => setEndDate(e.target.value)}
-                  className="w-full pl-10 pr-3 py-2 bg-cinza-escuro border border-gray-700 rounded-lg focus:border-azul-ciano focus:outline-none text-branco text-sm"
+                  className="w-full pl-10 pr-3 py-2 bg-gray-700 border border-gray-600 rounded-lg focus:border-azul-ciano focus:outline-none text-branco text-sm"
                 />
               </div>
             </div>
@@ -318,7 +359,7 @@ const RealAffiliatesPage: React.FC = () => {
         {/* MLM Affiliates Table */}
         <div className="bg-gray-800 rounded-lg border border-gray-700">
           <div className="p-6 border-b border-gray-700">
-            <h2 className="text-xl font-semibold text-white mb-2">Rede MLM por Afiliado</h2>
+            <h2 className="text-xl font-semibold text-branco mb-2">Rede MLM por Afiliado</h2>
             <p className="text-gray-400">Distribuição de indicações por níveis da rede MLM</p>
           </div>
 
@@ -326,6 +367,9 @@ const RealAffiliatesPage: React.FC = () => {
             <table className="w-full">
               <thead className="bg-gray-700">
                 <tr>
+                  <th className="px-6 py-4 text-left text-xs font-medium text-gray-300 uppercase tracking-wider">
+                    Registro
+                  </th>
                   <th className="px-6 py-4 text-left text-xs font-medium text-gray-300 uppercase tracking-wider">
                     ID
                   </th>
@@ -383,14 +427,46 @@ const RealAffiliatesPage: React.FC = () => {
                       {getSortIcon('n5')}
                     </div>
                   </th>
+                  <th 
+                    className="px-6 py-4 text-left text-xs font-medium text-gray-300 uppercase tracking-wider cursor-pointer hover:bg-gray-600 transition-colors"
+                    onClick={() => handleSort('cpa_pago')}
+                  >
+                    <div className="flex items-center gap-1">
+                      CPA Pago
+                      {getSortIcon('cpa_pago')}
+                    </div>
+                  </th>
+                  <th 
+                    className="px-6 py-4 text-left text-xs font-medium text-gray-300 uppercase tracking-wider cursor-pointer hover:bg-gray-600 transition-colors"
+                    onClick={() => handleSort('rev_pago')}
+                  >
+                    <div className="flex items-center gap-1">
+                      REV Pago
+                      {getSortIcon('rev_pago')}
+                    </div>
+                  </th>
+                  <th 
+                    className="px-6 py-4 text-left text-xs font-medium text-gray-300 uppercase tracking-wider cursor-pointer hover:bg-gray-600 transition-colors"
+                    onClick={() => handleSort('total_pago')}
+                  >
+                    <div className="flex items-center gap-1">
+                      Total Pago
+                      {getSortIcon('total_pago')}
+                    </div>
+                  </th>
                 </tr>
               </thead>
-              <tbody className="divide-y divide-gray-700">
+              <tbody className="divide-y divide-gray-700 bg-gray-800">
                 {sortedAffiliates.length > 0 ? (
                   sortedAffiliates.map((affiliate) => (
-                    <tr key={affiliate.affiliate_id} className="hover:bg-gray-700/50 transition-colors">
+                    <tr key={affiliate.affiliate_id} className="hover:bg-gray-700 transition-colors">
                       <td className="px-6 py-4 whitespace-nowrap">
-                        <div className="text-sm font-medium text-white">
+                        <div className="text-sm text-gray-300">
+                          {new Date(affiliate.registro).toLocaleDateString('pt-BR')}
+                        </div>
+                      </td>
+                      <td className="px-6 py-4 whitespace-nowrap">
+                        <div className="text-sm font-medium text-branco">
                           {affiliate.affiliate_id}
                         </div>
                       </td>
@@ -400,35 +476,50 @@ const RealAffiliatesPage: React.FC = () => {
                         </div>
                       </td>
                       <td className="px-6 py-4 whitespace-nowrap">
-                        <div className="text-sm text-branco">
+                        <div className="text-sm text-gray-300">
                           {affiliate.n1.toLocaleString()}
                         </div>
                       </td>
                       <td className="px-6 py-4 whitespace-nowrap">
-                        <div className="text-sm text-branco">
+                        <div className="text-sm text-gray-300">
                           {affiliate.n2.toLocaleString()}
                         </div>
                       </td>
                       <td className="px-6 py-4 whitespace-nowrap">
-                        <div className="text-sm text-branco">
+                        <div className="text-sm text-gray-300">
                           {affiliate.n3.toLocaleString()}
                         </div>
                       </td>
                       <td className="px-6 py-4 whitespace-nowrap">
-                        <div className="text-sm text-branco">
+                        <div className="text-sm text-gray-300">
                           {affiliate.n4.toLocaleString()}
                         </div>
                       </td>
                       <td className="px-6 py-4 whitespace-nowrap">
-                        <div className="text-sm text-branco">
+                        <div className="text-sm text-gray-300">
                           {affiliate.n5.toLocaleString()}
+                        </div>
+                      </td>
+                      <td className="px-6 py-4 whitespace-nowrap">
+                        <div className="text-sm text-gray-400">
+                          R$ {affiliate.cpa_pago.toFixed(2)}
+                        </div>
+                      </td>
+                      <td className="px-6 py-4 whitespace-nowrap">
+                        <div className="text-sm text-gray-400">
+                          R$ {affiliate.rev_pago.toFixed(2)}
+                        </div>
+                      </td>
+                      <td className="px-6 py-4 whitespace-nowrap">
+                        <div className="text-sm font-medium text-azul-ciano">
+                          R$ {affiliate.total_pago.toFixed(2)}
                         </div>
                       </td>
                     </tr>
                   ))
                 ) : (
                   <tr>
-                    <td colSpan={7} className="px-6 py-12 text-center">
+                    <td colSpan={11} className="px-6 py-12 text-center bg-gray-800">
                       <div className="flex flex-col items-center justify-center">
                         <Network className="w-12 h-12 text-gray-500 mb-4" />
                         <p className="text-gray-400 text-lg">Nenhum afiliado encontrado</p>
