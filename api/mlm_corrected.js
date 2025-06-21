@@ -14,9 +14,12 @@ app.get('/api/affiliates/mlm-levels-corrected', async (req, res) => {
     const endDate = req.query.end_date;
 
     console.log(`🔍 Buscando afiliados com níveis MLM CORRIGIDOS - Página: ${page}, Limit: ${limit}, Offset: ${offset}`);
+    console.log(`📅 PARÂMETROS RECEBIDOS - startDate: "${startDate}", endDate: "${endDate}"`);
     
     if (startDate || endDate) {
-      console.log(`📅 FILTRO POR DATA DAS INDICAÇÕES - De: ${startDate || 'início'} Até: ${endDate || 'fim'}`);
+      console.log(`📅 FILTRO POR DATA DAS INDICAÇÕES ATIVO - De: ${startDate || 'início'} Até: ${endDate || 'fim'}`);
+    } else {
+      console.log(`⚠️ NENHUM FILTRO DE DATA APLICADO - Buscando TODOS os registros`);
     }
 
     // Testar conexão com banco primeiro
@@ -53,10 +56,21 @@ app.get('/api/affiliates/mlm-levels-corrected', async (req, res) => {
     
     allTrackedQuery += ` ORDER BY user_afil, user_id`;
 
+    console.log(`🔍 QUERY SQL CONSTRUÍDA:`, allTrackedQuery);
+    console.log(`📋 PARÂMETROS DA QUERY:`, queryParams);
+
     const allTrackedResult = await pool.query(allTrackedQuery, queryParams);
     const allTrackedData = allTrackedResult.rows;
     
     console.log(`📈 Total de registros tracked encontrados (com filtro): ${allTrackedData.length}`);
+    
+    // Log de amostra dos dados para debug
+    if (allTrackedData.length > 0) {
+      console.log(`📊 AMOSTRA DOS DADOS (primeiros 3 registros):`);
+      allTrackedData.slice(0, 3).forEach((record, index) => {
+        console.log(`  ${index + 1}. Afiliado: ${record.affiliate_id}, Usuário: ${record.referred_user_id}, Data: ${record.created_at}`);
+      });
+    }
     
     if (startDate || endDate) {
       console.log(`🎯 Indicações filtradas por período: ${startDate || 'início'} até ${endDate || 'fim'}`);
@@ -171,42 +185,53 @@ function calculateN1ToN5Stats(hierarchy, trackedData) {
 // Função para calcular N1-N5 de um afiliado específico
 function calculateAffiliateN1ToN5(affiliateId, relationships, userToAffiliate) {
   const levels = { 1: 0, 2: 0, 3: 0, 4: 0, 5: 0 };
-  const visited = new Set();
   
-  function mapLevelsRecursive(currentId, relativeLevel) {
-    if (visited.has(currentId) || relativeLevel > 5) {
-      return; // Evitar loops e limitar a N5
+  // N1: Indicações DIRETAS do afiliado (apenas primeiro nível)
+  const directReferrals = relationships.get(affiliateId) || [];
+  levels[1] = directReferrals.length;
+  
+  // N2-N5: Indicações dos indicados (níveis indiretos)
+  function calculateIndirectLevels(userIds, currentLevel) {
+    if (currentLevel > 5 || userIds.length === 0) {
+      return;
     }
     
-    visited.add(currentId);
-    const children = relationships.get(currentId) || [];
+    const nextLevelUsers = [];
     
-    for (const childId of children) {
-      if (relativeLevel <= 5) {
-        levels[relativeLevel]++;
-        
-        // Se o filho também é afiliado, continuar recursivamente
-        if (relationships.has(childId)) {
-          mapLevelsRecursive(childId, relativeLevel + 1);
-        }
+    for (const userId of userIds) {
+      // Se este usuário também é afiliado, contar suas indicações
+      if (relationships.has(userId)) {
+        const userReferrals = relationships.get(userId) || [];
+        levels[currentLevel] += userReferrals.length;
+        nextLevelUsers.push(...userReferrals);
       }
+    }
+    
+    // Continuar para o próximo nível
+    if (nextLevelUsers.length > 0 && currentLevel < 5) {
+      calculateIndirectLevels(nextLevelUsers, currentLevel + 1);
     }
   }
   
-  // Iniciar mapeamento a partir do afiliado
-  mapLevelsRecursive(affiliateId, 1);
+  // Calcular N2-N5 a partir dos indicados diretos
+  calculateIndirectLevels(directReferrals, 2);
   
-  // Calcular total como N1+N2+N3+N4+N5 (conforme documentação)
-  const total = levels[1] + levels[2] + levels[3] + levels[4] + levels[5];
+  // CORREÇÃO: Total = apenas indicações DIRETAS (N1), não soma de todos os níveis
+  const total = levels[1];
   
   return {
     affiliate_id: affiliateId,
-    total: total,
-    n1: levels[1],
-    n2: levels[2],
-    n3: levels[3],
-    n4: levels[4],
-    n5: levels[5]
+    total: total, // Apenas indicações diretas
+    n1: levels[1], // Indicações diretas
+    n2: levels[2], // Indicações dos indicados
+    n3: levels[3], // Indicações dos indicados dos indicados
+    n4: levels[4], // E assim por diante...
+    n5: levels[5],
+    // Adicionar data de registro simulada
+    registro: '2025-06-20', // Será substituída por dados reais se disponível
+    cpa_pago: 0,
+    rev_pago: 0,
+    total_pago: 0
   };
 }
 
