@@ -76,6 +76,16 @@ export interface MLMResponse {
     total: number;
     limit: number;
   };
+  debug?: {
+    total_tracked_records: number;
+    total_affiliates_with_indications: number;
+    total_indications_in_period: number;
+    algorithm: string;
+    date_filter?: {
+      start_date?: string;
+      end_date?: string;
+    };
+  };
 }
 
 export interface StatsResponse {

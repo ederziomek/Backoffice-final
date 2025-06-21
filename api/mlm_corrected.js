@@ -1,5 +1,6 @@
 // ALGORITMO MLM CORRIGIDO - Implementação conforme documentação
 // Busca TODOS os 614.944 registros e constrói hierarquia infinita
+// NOVO: Filtro por data das indicações (created_at)
 
 // Nova rota para lista de afiliados com níveis MLM detalhados - ALGORITMO CORRIGIDO
 app.get('/api/affiliates/mlm-levels-corrected', async (req, res) => {
@@ -7,17 +8,25 @@ app.get('/api/affiliates/mlm-levels-corrected', async (req, res) => {
     const page = parseInt(req.query.page) || 1;
     const limit = parseInt(req.query.limit) || 20;
     const offset = (page - 1) * limit;
+    
+    // NOVO: Parâmetros de filtro por data das indicações
+    const startDate = req.query.start_date;
+    const endDate = req.query.end_date;
 
     console.log(`🔍 Buscando afiliados com níveis MLM CORRIGIDOS - Página: ${page}, Limit: ${limit}, Offset: ${offset}`);
+    
+    if (startDate || endDate) {
+      console.log(`📅 FILTRO POR DATA DAS INDICAÇÕES - De: ${startDate || 'início'} Até: ${endDate || 'fim'}`);
+    }
 
     // Testar conexão com banco primeiro
     await pool.query('SELECT 1');
     console.log('✅ Conexão com banco PostgreSQL OK');
 
-    // ALGORITMO CORRIGIDO: Buscar TODOS os registros tracked primeiro
-    console.log('📊 Buscando TODOS os registros tracked...');
+    // ALGORITMO CORRIGIDO: Buscar registros tracked com filtro de data das indicações
+    console.log('📊 Buscando registros tracked com filtro de data...');
     
-    const allTrackedQuery = `
+    let allTrackedQuery = `
       SELECT 
         user_afil as affiliate_id,
         user_id as referred_user_id,
@@ -27,31 +36,54 @@ app.get('/api/affiliates/mlm-levels-corrected', async (req, res) => {
       WHERE tracked_type_id = 1 
         AND user_afil IS NOT NULL 
         AND user_id IS NOT NULL
-      ORDER BY user_afil, user_id
     `;
+    
+    const queryParams = [];
+    
+    // NOVO: Adicionar filtros de data das indicações
+    if (startDate) {
+      queryParams.push(startDate);
+      allTrackedQuery += ` AND created_at >= $${queryParams.length}`;
+    }
+    
+    if (endDate) {
+      queryParams.push(endDate + ' 23:59:59'); // Incluir todo o dia final
+      allTrackedQuery += ` AND created_at <= $${queryParams.length}`;
+    }
+    
+    allTrackedQuery += ` ORDER BY user_afil, user_id`;
 
-    const allTrackedResult = await pool.query(allTrackedQuery);
+    const allTrackedResult = await pool.query(allTrackedQuery, queryParams);
     const allTrackedData = allTrackedResult.rows;
     
-    console.log(`📈 Total de registros tracked encontrados: ${allTrackedData.length}`);
+    console.log(`📈 Total de registros tracked encontrados (com filtro): ${allTrackedData.length}`);
+    
+    if (startDate || endDate) {
+      console.log(`🎯 Indicações filtradas por período: ${startDate || 'início'} até ${endDate || 'fim'}`);
+    }
 
     // Construir hierarquia infinita conforme documentação
     const hierarchy = buildInfiniteHierarchy(allTrackedData);
     
-    // Calcular estatísticas N1-N5 para cada afiliado
+    // Calcular estatísticas N1-N5 para cada afiliado (apenas indicações do período)
     const affiliateStats = calculateN1ToN5Stats(hierarchy, allTrackedData);
     
+    // Filtrar apenas afiliados que têm indicações no período
+    const affiliatesWithIndicationsInPeriod = Object.values(affiliateStats)
+      .filter(affiliate => affiliate.total > 0);
+    
     // Ordenar por total e paginar
-    const sortedAffiliates = Object.values(affiliateStats)
+    const sortedAffiliates = affiliatesWithIndicationsInPeriod
       .sort((a, b) => b.total - a.total)
       .slice(offset, offset + limit);
 
-    // Contar total de afiliados únicos
-    const totalAffiliates = Object.keys(affiliateStats).length;
+    // Contar total de afiliados com indicações no período
+    const totalAffiliates = affiliatesWithIndicationsInPeriod.length;
     const totalPages = Math.ceil(totalAffiliates / limit);
+    const totalIndications = affiliatesWithIndicationsInPeriod.reduce((sum, a) => sum + a.total, 0);
 
-    console.log(`✅ Processados ${totalAffiliates} afiliados únicos com hierarquia infinita`);
-    console.log(`📊 Total de indicações: ${Object.values(affiliateStats).reduce((sum, a) => sum + a.total, 0)}`);
+    console.log(`✅ Processados ${totalAffiliates} afiliados com indicações no período`);
+    console.log(`📊 Total de indicações no período: ${totalIndications}`);
 
     res.json({
       status: 'success',
@@ -64,8 +96,13 @@ app.get('/api/affiliates/mlm-levels-corrected', async (req, res) => {
       },
       debug: {
         total_tracked_records: allTrackedData.length,
-        total_affiliates: totalAffiliates,
-        algorithm: 'infinite_hierarchy_n1_to_n5'
+        total_affiliates_with_indications: totalAffiliates,
+        total_indications_in_period: totalIndications,
+        algorithm: 'infinite_hierarchy_n1_to_n5_filtered_by_indication_date',
+        date_filter: {
+          start_date: startDate,
+          end_date: endDate
+        }
       }
     });
 
