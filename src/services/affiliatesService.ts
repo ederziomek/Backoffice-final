@@ -133,12 +133,30 @@ class AffiliatesService {
   }
 
   // Buscar dados MLM com níveis detalhados da API local - ALGORITMO CORRIGIDO
-  async getAffiliatesMLMLevels(page: number = 1, per_page: number = 20): Promise<MLMResponse> {
+  async getAffiliatesMLMLevels(
+    page: number = 1, 
+    per_page: number = 20, 
+    startDate?: string, 
+    endDate?: string
+  ): Promise<MLMResponse> {
     try {
       console.log(`🔍 Buscando afiliados MLM CORRIGIDOS da API local - Página: ${page}, Por página: ${per_page}`);
       
-      // USAR ENDPOINT CORRIGIDO que processa todos os 614.944 registros
-      const response = await api.get(`/affiliates/mlm-levels-corrected?page=${page}&limit=${per_page}`);
+      // Construir parâmetros da query
+      let queryParams = `page=${page}&limit=${per_page}`;
+      
+      if (startDate) {
+        queryParams += `&start_date=${startDate}`;
+        console.log(`📅 Filtro data inicial: ${startDate}`);
+      }
+      
+      if (endDate) {
+        queryParams += `&end_date=${endDate}`;
+        console.log(`📅 Filtro data final: ${endDate}`);
+      }
+      
+      // USAR ENDPOINT CORRIGIDO que processa indicações por período
+      const response = await api.get(`/affiliates/mlm-levels-corrected?${queryParams}`);
       
       console.log('📊 Resposta dos afiliados MLM CORRIGIDOS:', response.data);
       
@@ -158,7 +176,11 @@ class AffiliatesService {
       // Fallback para endpoint antigo se o corrigido falhar
       console.log('🔄 Tentando endpoint antigo como fallback...');
       try {
-        const fallbackResponse = await api.get(`/affiliates/mlm-levels?page=${page}&limit=${per_page}`);
+        let fallbackParams = `page=${page}&limit=${per_page}`;
+        if (startDate) fallbackParams += `&start_date=${startDate}`;
+        if (endDate) fallbackParams += `&end_date=${endDate}`;
+        
+        const fallbackResponse = await api.get(`/affiliates/mlm-levels?${fallbackParams}`);
         return {
           status: fallbackResponse.data.status,
           data: fallbackResponse.data.data || [],

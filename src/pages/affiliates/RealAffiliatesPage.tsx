@@ -38,7 +38,6 @@ interface MLMResponse {
 
 const RealAffiliatesPage: React.FC = () => {
   const [affiliates, setAffiliates] = useState<MLMAffiliate[]>([]);
-  const [allAffiliates, setAllAffiliates] = useState<MLMAffiliate[]>([]); // Dados originais para filtro
   const [stats, setStats] = useState<AffiliateStats | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -51,14 +50,14 @@ const RealAffiliatesPage: React.FC = () => {
   const [sortDirection, setSortDirection] = useState<'asc' | 'desc'>('desc');
   const limit = 20;
 
-  const fetchMLMAffiliates = async (page: number = 1) => {
+  const fetchMLMAffiliates = async (page: number = 1, startDate?: string, endDate?: string) => {
     try {
       setLoading(true);
       setError(null);
       
-      console.log(`🔍 Buscando afiliados MLM - Página: ${page}`);
+      console.log('🔍 Buscando afiliados MLM com filtros:', { page, startDate, endDate });
       
-      const response: MLMResponse = await affiliatesService.getAffiliatesMLMLevels(page, limit);
+      const response: MLMResponse = await affiliatesService.getAffiliatesMLMLevels(page, limit, startDate, endDate);
       
       console.log('📊 Dados MLM recebidos:', response);
       
@@ -66,14 +65,13 @@ const RealAffiliatesPage: React.FC = () => {
         // Processar dados para incluir novas colunas
         const processedData = response.data.map(affiliate => ({
           ...affiliate,
-          registro: new Date(Date.now() - Math.random() * 365 * 24 * 60 * 60 * 1000).toISOString().split('T')[0], // Data aleatória no último ano
-          cpa_pago: 0, // Inicialmente 0 conforme solicitado
-          rev_pago: 0, // Inicialmente 0 conforme solicitado
-          total_pago: 0 // CPA + REV = 0 + 0 = 0
+          registro: affiliate.registro || new Date(Date.now() - Math.random() * 365 * 24 * 60 * 60 * 1000).toISOString().split('T')[0], // Data aleatória se não vier da API
+          cpa_pago: affiliate.cpa_pago || 0, // Usar valor da API ou 0
+          rev_pago: affiliate.rev_pago || 0, // Usar valor da API ou 0
+          total_pago: (affiliate.cpa_pago || 0) + (affiliate.rev_pago || 0) // Calcular total
         }));
         
         setAffiliates(processedData);
-        setAllAffiliates(processedData); // Armazenar dados originais para filtro
         setTotalPages(response.pagination?.pages || 1);
         setCurrentPage(response.pagination?.page || 1);
         setTotalAffiliates(response.pagination?.total || 0);
@@ -128,57 +126,32 @@ const RealAffiliatesPage: React.FC = () => {
 
   const handlePageChange = (page: number) => {
     if (page >= 1 && page <= totalPages) {
-      fetchMLMAffiliates(page);
+      console.log('📄 Mudando para página:', page);
+      setCurrentPage(page);
+      // Manter filtros de data ao mudar de página
+      fetchMLMAffiliates(page, startDate || undefined, endDate || undefined);
     }
   };
 
   const handleRefresh = async () => {
     await Promise.all([
-      fetchMLMAffiliates(currentPage),
+      fetchMLMAffiliates(currentPage, startDate || undefined, endDate || undefined),
       fetchStats()
     ]);
   };
 
   const handleApplyDateFilter = () => {
-    if (!startDate && !endDate) {
-      // Se não há filtros, mostrar todos os dados
-      setAffiliates(allAffiliates);
-      return;
-    }
-
-    const filteredData = allAffiliates.filter(affiliate => {
-      const registroDate = new Date(affiliate.registro);
-      
-      // Verificar data inicial
-      if (startDate) {
-        const startDateObj = new Date(startDate);
-        if (registroDate < startDateObj) {
-          return false;
-        }
-      }
-      
-      // Verificar data final
-      if (endDate) {
-        const endDateObj = new Date(endDate);
-        endDateObj.setHours(23, 59, 59, 999); // Incluir todo o dia final
-        if (registroDate > endDateObj) {
-          return false;
-        }
-      }
-      
-      return true;
-    });
-
-    setAffiliates(filteredData);
+    console.log('🔍 Aplicando filtro de data via API:', { startDate, endDate });
     setCurrentPage(1);
-    console.log('Filtro de data aplicado:', { startDate, endDate, resultados: filteredData.length });
+    fetchMLMAffiliates(1, startDate || undefined, endDate || undefined);
   };
 
   const handleClearDateFilter = () => {
+    console.log('🧹 Limpando filtro de data');
     setStartDate('');
     setEndDate('');
-    setAffiliates(allAffiliates); // Restaurar todos os dados
     setCurrentPage(1);
+    fetchMLMAffiliates(1); // Buscar sem filtros
   };
 
   const handleSort = (field: keyof MLMAffiliate) => {
@@ -310,8 +283,16 @@ const RealAffiliatesPage: React.FC = () => {
           {(startDate || endDate) && (
             <div className="mt-3 text-sm text-gray-400">
               <span className="font-medium">Período selecionado:</span>
-              {startDate && <span className="ml-2">De: {new Date(startDate).toLocaleDateString('pt-BR')}</span>}
-              {endDate && <span className="ml-2">Até: {new Date(endDate).toLocaleDateString('pt-BR')}</span>}
+              {startDate && (
+                <span className="ml-2">
+                  De: {startDate.split('-').reverse().join('/')}
+                </span>
+              )}
+              {endDate && (
+                <span className="ml-2">
+                  Até: {endDate.split('-').reverse().join('/')}
+                </span>
+              )}
             </div>
           )}
         </div>
