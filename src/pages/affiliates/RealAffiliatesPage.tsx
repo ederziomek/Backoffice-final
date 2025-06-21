@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { Users, Network, RefreshCw, AlertCircle } from 'lucide-react';
+import { Users, Network, RefreshCw, AlertCircle, Calendar, Filter, ChevronUp, ChevronDown } from 'lucide-react';
 import { affiliatesService } from '@/services/affiliatesService';
 
 interface MLMAffiliate {
@@ -40,6 +40,10 @@ const RealAffiliatesPage: React.FC = () => {
   const [currentPage, setCurrentPage] = useState(1);
   const [totalPages, setTotalPages] = useState(1);
   const [totalAffiliates, setTotalAffiliates] = useState(0);
+  const [startDate, setStartDate] = useState<string>('');
+  const [endDate, setEndDate] = useState<string>('');
+  const [sortField, setSortField] = useState<keyof MLMAffiliate | null>(null);
+  const [sortDirection, setSortDirection] = useState<'asc' | 'desc'>('desc');
   const limit = 20;
 
   const fetchMLMAffiliates = async (page: number = 1) => {
@@ -120,6 +124,58 @@ const RealAffiliatesPage: React.FC = () => {
     ]);
   };
 
+  const handleApplyDateFilter = () => {
+    // Nota: A API atual não suporta filtros de data
+    // Esta funcionalidade será implementada quando a API for atualizada
+    console.log('Filtro de data aplicado:', { startDate, endDate });
+    // Por enquanto, apenas recarrega os dados
+    setCurrentPage(1);
+    fetchMLMAffiliates(1);
+  };
+
+  const handleClearDateFilter = () => {
+    setStartDate('');
+    setEndDate('');
+    setCurrentPage(1);
+    fetchMLMAffiliates(1);
+  };
+
+  const handleSort = (field: keyof MLMAffiliate) => {
+    let direction: 'asc' | 'desc' = 'desc';
+    
+    if (sortField === field && sortDirection === 'desc') {
+      direction = 'asc';
+    }
+    
+    setSortField(field);
+    setSortDirection(direction);
+  };
+
+  const sortedAffiliates = React.useMemo(() => {
+    if (!sortField) return affiliates;
+    
+    return [...affiliates].sort((a, b) => {
+      const aValue = a[sortField];
+      const bValue = b[sortField];
+      
+      if (sortDirection === 'asc') {
+        return aValue > bValue ? 1 : -1;
+      } else {
+        return aValue < bValue ? 1 : -1;
+      }
+    });
+  }, [affiliates, sortField, sortDirection]);
+
+  const getSortIcon = (field: keyof MLMAffiliate) => {
+    if (sortField !== field) {
+      return <ChevronDown className="w-4 h-4 text-gray-500" />;
+    }
+    
+    return sortDirection === 'desc' 
+      ? <ChevronDown className="w-4 h-4 text-azul-ciano" />
+      : <ChevronUp className="w-4 h-4 text-azul-ciano" />;
+  };
+
   if (loading) {
     return (
       <div className="min-h-screen bg-gray-900 text-white p-6">
@@ -154,6 +210,69 @@ const RealAffiliatesPage: React.FC = () => {
               Atualizar
             </button>
           </div>
+        </div>
+
+        {/* Date Filters */}
+        <div className="mb-8 p-4 bg-cinza-claro rounded-lg border border-gray-700">
+          <div className="flex items-center gap-2 mb-4">
+            <Filter className="w-5 h-5 text-azul-ciano" />
+            <h3 className="text-lg font-semibold text-branco">Filtros de Data</h3>
+          </div>
+          <div className="grid grid-cols-1 md:grid-cols-4 gap-4 items-end">
+            <div>
+              <label htmlFor="startDate" className="block text-sm font-medium text-gray-300 mb-1">
+                Data Inicial
+              </label>
+              <div className="relative">
+                <Calendar className="absolute left-3 top-1/2 transform -translate-y-1/2 w-4 h-4 text-gray-400" />
+                <input
+                  type="date"
+                  id="startDate"
+                  value={startDate}
+                  onChange={(e) => setStartDate(e.target.value)}
+                  className="w-full pl-10 pr-3 py-2 bg-cinza-escuro border border-gray-700 rounded-lg focus:border-azul-ciano focus:outline-none text-branco text-sm"
+                />
+              </div>
+            </div>
+            <div>
+              <label htmlFor="endDate" className="block text-sm font-medium text-gray-300 mb-1">
+                Data Final
+              </label>
+              <div className="relative">
+                <Calendar className="absolute left-3 top-1/2 transform -translate-y-1/2 w-4 h-4 text-gray-400" />
+                <input
+                  type="date"
+                  id="endDate"
+                  value={endDate}
+                  onChange={(e) => setEndDate(e.target.value)}
+                  className="w-full pl-10 pr-3 py-2 bg-cinza-escuro border border-gray-700 rounded-lg focus:border-azul-ciano focus:outline-none text-branco text-sm"
+                />
+              </div>
+            </div>
+            <div>
+              <button
+                onClick={handleApplyDateFilter}
+                className="w-full px-4 py-2 bg-azul-ciano hover:bg-opacity-80 text-branco font-medium rounded-lg transition-colors"
+              >
+                Aplicar Filtro
+              </button>
+            </div>
+            <div>
+              <button
+                onClick={handleClearDateFilter}
+                className="w-full px-4 py-2 bg-gray-600 hover:bg-gray-700 text-branco font-medium rounded-lg transition-colors"
+              >
+                Limpar Filtro
+              </button>
+            </div>
+          </div>
+          {(startDate || endDate) && (
+            <div className="mt-3 text-sm text-gray-400">
+              <span className="font-medium">Período selecionado:</span>
+              {startDate && <span className="ml-2">De: {new Date(startDate).toLocaleDateString('pt-BR')}</span>}
+              {endDate && <span className="ml-2">Até: {new Date(endDate).toLocaleDateString('pt-BR')}</span>}
+            </div>
+          )}
         </div>
 
         {/* Stats Cards */}
@@ -210,29 +329,65 @@ const RealAffiliatesPage: React.FC = () => {
                   <th className="px-6 py-4 text-left text-xs font-medium text-gray-300 uppercase tracking-wider">
                     ID
                   </th>
-                  <th className="px-6 py-4 text-left text-xs font-medium text-gray-300 uppercase tracking-wider">
-                    Total
+                  <th 
+                    className="px-6 py-4 text-left text-xs font-medium text-gray-300 uppercase tracking-wider cursor-pointer hover:bg-gray-600 transition-colors"
+                    onClick={() => handleSort('total')}
+                  >
+                    <div className="flex items-center gap-1">
+                      Total
+                      {getSortIcon('total')}
+                    </div>
                   </th>
-                  <th className="px-6 py-4 text-left text-xs font-medium text-gray-300 uppercase tracking-wider">
-                    N1
+                  <th 
+                    className="px-6 py-4 text-left text-xs font-medium text-gray-300 uppercase tracking-wider cursor-pointer hover:bg-gray-600 transition-colors"
+                    onClick={() => handleSort('n1')}
+                  >
+                    <div className="flex items-center gap-1">
+                      N1
+                      {getSortIcon('n1')}
+                    </div>
                   </th>
-                  <th className="px-6 py-4 text-left text-xs font-medium text-gray-300 uppercase tracking-wider">
-                    N2
+                  <th 
+                    className="px-6 py-4 text-left text-xs font-medium text-gray-300 uppercase tracking-wider cursor-pointer hover:bg-gray-600 transition-colors"
+                    onClick={() => handleSort('n2')}
+                  >
+                    <div className="flex items-center gap-1">
+                      N2
+                      {getSortIcon('n2')}
+                    </div>
                   </th>
-                  <th className="px-6 py-4 text-left text-xs font-medium text-gray-300 uppercase tracking-wider">
-                    N3
+                  <th 
+                    className="px-6 py-4 text-left text-xs font-medium text-gray-300 uppercase tracking-wider cursor-pointer hover:bg-gray-600 transition-colors"
+                    onClick={() => handleSort('n3')}
+                  >
+                    <div className="flex items-center gap-1">
+                      N3
+                      {getSortIcon('n3')}
+                    </div>
                   </th>
-                  <th className="px-6 py-4 text-left text-xs font-medium text-gray-300 uppercase tracking-wider">
-                    N4
+                  <th 
+                    className="px-6 py-4 text-left text-xs font-medium text-gray-300 uppercase tracking-wider cursor-pointer hover:bg-gray-600 transition-colors"
+                    onClick={() => handleSort('n4')}
+                  >
+                    <div className="flex items-center gap-1">
+                      N4
+                      {getSortIcon('n4')}
+                    </div>
                   </th>
-                  <th className="px-6 py-4 text-left text-xs font-medium text-gray-300 uppercase tracking-wider">
-                    N5
+                  <th 
+                    className="px-6 py-4 text-left text-xs font-medium text-gray-300 uppercase tracking-wider cursor-pointer hover:bg-gray-600 transition-colors"
+                    onClick={() => handleSort('n5')}
+                  >
+                    <div className="flex items-center gap-1">
+                      N5
+                      {getSortIcon('n5')}
+                    </div>
                   </th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-gray-700">
-                {affiliates.length > 0 ? (
-                  affiliates.map((affiliate) => (
+                {sortedAffiliates.length > 0 ? (
+                  sortedAffiliates.map((affiliate) => (
                     <tr key={affiliate.affiliate_id} className="hover:bg-gray-700/50 transition-colors">
                       <td className="px-6 py-4 whitespace-nowrap">
                         <div className="text-sm font-medium text-white">
@@ -240,32 +395,32 @@ const RealAffiliatesPage: React.FC = () => {
                         </div>
                       </td>
                       <td className="px-6 py-4 whitespace-nowrap">
-                        <div className="text-sm font-bold text-cyan-400">
+                        <div className="text-sm font-bold text-azul-ciano">
                           {affiliate.total.toLocaleString()}
                         </div>
                       </td>
                       <td className="px-6 py-4 whitespace-nowrap">
-                        <div className="text-sm text-green-400">
+                        <div className="text-sm text-branco">
                           {affiliate.n1.toLocaleString()}
                         </div>
                       </td>
                       <td className="px-6 py-4 whitespace-nowrap">
-                        <div className="text-sm text-blue-400">
+                        <div className="text-sm text-branco">
                           {affiliate.n2.toLocaleString()}
                         </div>
                       </td>
                       <td className="px-6 py-4 whitespace-nowrap">
-                        <div className="text-sm text-purple-400">
+                        <div className="text-sm text-branco">
                           {affiliate.n3.toLocaleString()}
                         </div>
                       </td>
                       <td className="px-6 py-4 whitespace-nowrap">
-                        <div className="text-sm text-yellow-400">
+                        <div className="text-sm text-branco">
                           {affiliate.n4.toLocaleString()}
                         </div>
                       </td>
                       <td className="px-6 py-4 whitespace-nowrap">
-                        <div className="text-sm text-red-400">
+                        <div className="text-sm text-branco">
                           {affiliate.n5.toLocaleString()}
                         </div>
                       </td>
