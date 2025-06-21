@@ -25,15 +25,18 @@ interface AffiliateStats {
   }>;
 }
 
-interface MLMResponse {
-  status: string;
-  data: MLMAffiliate[];
-  pagination: {
-    page: number;
-    pages: number;
-    total: number;
-    limit: number;
-  };
+interface MLMAffiliate {
+  affiliate_id: number;
+  registro: string;
+  total: number;
+  n1: number;
+  n2: number;
+  n3: number;
+  n4: number;
+  n5: number;
+  cpa_pago: number;
+  rev_pago: number;
+  total_pago: number;
 }
 
 const RealAffiliatesPage: React.FC = () => {
@@ -49,7 +52,6 @@ const RealAffiliatesPage: React.FC = () => {
   const [endDate, setEndDate] = useState<string>('');
   const [sortField, setSortField] = useState<keyof MLMAffiliate | null>(null);
   const [sortDirection, setSortDirection] = useState<'asc' | 'desc'>('desc');
-  const limit = 20;
 
   // Função para aplicar filtro local de data
   const applyLocalDateFilter = (data: MLMAffiliate[], startDate?: string, endDate?: string): MLMAffiliate[] => {
