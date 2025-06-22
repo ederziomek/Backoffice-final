@@ -114,9 +114,13 @@ const RealAffiliatesPage: React.FC = () => {
       return;
     }
     
-    console.log('🎯 Aplicando filtro de data das indicações:', { startDate, endDate });
-    setCurrentPage(1);
-    fetchMLMAffiliates(1, startDate, endDate);
+    // AVISO: Filtro por data não está disponível na base de dados atual
+    alert('⚠️ AVISO: O filtro por data não está disponível pois a tabela de dados não possui informação temporal. Os dados mostrados são sempre todos os registros disponíveis.');
+    
+    console.log('🎯 Tentativa de aplicar filtro de data (não disponível):', { startDate, endDate });
+    // Não recarregar dados pois o filtro não funciona
+    // setCurrentPage(1);
+    // fetchMLMAffiliates(1, startDate, endDate);
   };
 
   const handleClearDateFilter = () => {
@@ -316,7 +320,6 @@ const RealAffiliatesPage: React.FC = () => {
           )}
         </div>
 
-        {/* Stats Cards */}
         <div className="grid grid-cols-1 md:grid-cols-2 gap-6 mb-8">
           <div className="bg-gray-800 rounded-lg p-6 border border-gray-700">
             <div className="flex items-center justify-between">

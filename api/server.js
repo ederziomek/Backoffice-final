@@ -201,24 +201,27 @@ app.get('/api/affiliates/stats', async (req, res) => {
   }
 });
 
-// ALGORITMO MLM CORRIGIDO - Implementação conforme documentação
-// Busca TODOS os 614.944 registros e constrói hierarquia infinita
+// ALGORITMO MLM CORRIGIDO - Versão Final (SEM FILTRO DE DATA)
+// A tabela tracked não possui coluna created_at, então removemos o filtro por data
 app.get('/api/affiliates/mlm-levels-corrected', async (req, res) => {
   try {
     const page = parseInt(req.query.page) || 1;
     const limit = parseInt(req.query.limit) || 20;
     const offset = (page - 1) * limit;
+    
+    // IMPORTANTE: Parâmetros de data são ignorados pois a tabela não tem coluna de data
+    const startDate = req.query.start_date;
+    const endDate = req.query.end_date;
 
-    console.log(`🔍 Buscando afiliados com níveis MLM CORRIGIDOS - Página: ${page}, Limit: ${limit}, Offset: ${offset}`);
+    console.log(`🔍 Buscando afiliados MLM CORRIGIDOS - Página: ${page}, Limit: ${limit}`);
+    console.log(`⚠️ AVISO: Filtro por data não disponível - tabela tracked não possui coluna created_at`);
 
-    // Testar conexão com banco primeiro
+    // Testar conexão
     await pool.query('SELECT 1');
     console.log('✅ Conexão com banco PostgreSQL OK');
 
-    // ALGORITMO CORRIGIDO: Buscar TODOS os registros tracked primeiro
-    console.log('📊 Buscando TODOS os registros tracked...');
-    
-    const allTrackedQuery = `
+    // CORREÇÃO: Query simples sem filtro de data (coluna não existe)
+    const baseQuery = `
       SELECT 
         user_afil as affiliate_id,
         user_id as referred_user_id,
@@ -230,42 +233,74 @@ app.get('/api/affiliates/mlm-levels-corrected', async (req, res) => {
       ORDER BY user_afil, user_id
     `;
 
-    const allTrackedResult = await pool.query(allTrackedQuery);
-    const allTrackedData = allTrackedResult.rows;
-    
-    console.log(`📈 Total de registros tracked encontrados: ${allTrackedData.length}`);
+    console.log(`🔍 Query SQL (sem filtro de data): ${baseQuery}`);
 
-    // Construir hierarquia infinita conforme documentação
-    const hierarchy = buildInfiniteHierarchy(allTrackedData);
+    // Buscar todos os dados (sem filtro de data)
+    const trackedResult = await pool.query(baseQuery);
+    const trackedData = trackedResult.rows;
     
-    // Calcular estatísticas N1-N5 para cada afiliado
-    const affiliateStats = calculateN1ToN5Stats(hierarchy, allTrackedData);
+    console.log(`📈 Total de registros encontrados: ${trackedData.length}`);
+
+    // Buscar estatísticas gerais
+    const totalStatsQuery = `
+      SELECT 
+        COUNT(DISTINCT user_afil) as total_affiliates,
+        COUNT(*) as total_indications
+      FROM tracked 
+      WHERE tracked_type_id = 1 
+        AND user_afil IS NOT NULL 
+        AND user_id IS NOT NULL
+    `;
+
+    const totalStatsResult = await pool.query(totalStatsQuery);
+    const totalStats = totalStatsResult.rows[0];
+
+    // Construir hierarquia MLM correta
+    const affiliateStats = buildCorrectMLMHierarchy(trackedData);
     
-    // Ordenar por total e paginar
-    const sortedAffiliates = Object.values(affiliateStats)
-      .sort((a, b) => b.total - a.total)
-      .slice(offset, offset + limit);
+    // Filtrar apenas afiliados com indicações
+    const filteredAffiliates = Object.values(affiliateStats)
+      .filter(affiliate => affiliate.total > 0)
+      .sort((a, b) => b.total - a.total);
 
-    // Contar total de afiliados únicos
-    const totalAffiliates = Object.keys(affiliateStats).length;
-    const totalPages = Math.ceil(totalAffiliates / limit);
+    // Paginar resultados
+    const paginatedAffiliates = filteredAffiliates.slice(offset, offset + limit);
+    const totalPages = Math.ceil(filteredAffiliates.length / limit);
 
-    console.log(`✅ Processados ${totalAffiliates} afiliados únicos com hierarquia infinita`);
-    console.log(`📊 Total de indicações: ${Object.values(affiliateStats).reduce((sum, a) => sum + a.total, 0)}`);
+    // Calcular estatísticas
+    const totalIndicationsCalculated = filteredAffiliates.reduce((sum, a) => sum + a.total, 0);
+    const totalAffiliatesCalculated = filteredAffiliates.length;
+
+    console.log(`✅ Resultado final:`);
+    console.log(`   - Afiliados processados: ${totalAffiliatesCalculated}`);
+    console.log(`   - Total de indicações calculadas: ${totalIndicationsCalculated}`);
+    console.log(`   - Filtro de data: NÃO DISPONÍVEL (coluna não existe)`);
 
     res.json({
       status: 'success',
-      data: sortedAffiliates,
+      data: paginatedAffiliates,
       pagination: {
         page: page,
         pages: totalPages,
-        total: totalAffiliates,
+        total: totalAffiliatesCalculated,
         limit: limit
       },
       debug: {
-        total_tracked_records: allTrackedData.length,
-        total_affiliates: totalAffiliates,
-        algorithm: 'infinite_hierarchy_n1_to_n5'
+        total_tracked_records: trackedData.length,
+        total_affiliates_with_indications: totalAffiliatesCalculated,
+        total_indications_calculated: totalIndicationsCalculated,
+        algorithm: 'corrected_mlm_without_date_filter',
+        date_filter_available: false,
+        date_filter_requested: {
+          start_date: startDate,
+          end_date: endDate
+        },
+        warning: 'Tabela tracked não possui coluna created_at - filtro por data não disponível',
+        // Estatísticas gerais
+        general_stats: {
+          total_affiliates: parseInt(totalStats.total_affiliates),
+          total_indications: parseInt(totalStats.total_indications)
+        }
       }
     });
 
@@ -279,96 +314,109 @@ app.get('/api/affiliates/mlm-levels-corrected', async (req, res) => {
   }
 });
 
-// Função para construir hierarquia infinita conforme documentação
-function buildInfiniteHierarchy(trackedData) {
-  console.log('🏗️ Construindo hierarquia infinita...');
+// CORREÇÃO 7: Função corrigida para construir hierarquia MLM
+function buildCorrectMLMHierarchy(trackedData) {
+  console.log('🏗️ Construindo hierarquia MLM corrigida...');
   
-  const relationships = new Map(); // affiliate_id -> [referred_users]
+  // Mapear relacionamentos diretos
+  const directRelationships = new Map(); // affiliate_id -> [user_ids]
   const userToAffiliate = new Map(); // user_id -> affiliate_id
-  const allAffiliates = new Set();
-  const allUsers = new Set();
   
-  // Processar TODOS os dados tracked
+  // Processar dados tracked
   for (const record of trackedData) {
     const affiliateId = record.affiliate_id;
-    const referredUserId = record.referred_user_id;
+    const userId = record.referred_user_id;
     
-    if (!relationships.has(affiliateId)) {
-      relationships.set(affiliateId, []);
+    if (!directRelationships.has(affiliateId)) {
+      directRelationships.set(affiliateId, new Set());
     }
-    relationships.get(affiliateId).push(referredUserId);
-    
-    userToAffiliate.set(referredUserId, affiliateId);
-    allAffiliates.add(affiliateId);
-    allUsers.add(referredUserId);
+    directRelationships.get(affiliateId).add(userId);
+    userToAffiliate.set(userId, affiliateId);
   }
   
-  console.log(`📊 Afiliados únicos: ${allAffiliates.size}`);
-  console.log(`👥 Usuários referidos únicos: ${allUsers.size}`);
-  console.log(`🔗 Relacionamentos mapeados: ${relationships.size}`);
-  
-  return {
-    relationships,
-    userToAffiliate,
-    allAffiliates,
-    allUsers
-  };
-}
-
-// Função para calcular N1-N5 por afiliado conforme documentação
-function calculateN1ToN5Stats(hierarchy, trackedData) {
-  console.log('🧮 Calculando estatísticas N1-N5 por afiliado...');
-  
-  const { relationships, userToAffiliate } = hierarchy;
   const affiliateStats = {};
   
-  // Para cada afiliado, calcular seus níveis N1-N5
-  for (const affiliateId of hierarchy.allAffiliates) {
-    const stats = calculateAffiliateN1ToN5(affiliateId, relationships, userToAffiliate);
+  // Para cada afiliado, calcular N1-N5
+  for (const [affiliateId, directUsers] of directRelationships) {
+    const stats = calculateCorrectN1ToN5(affiliateId, directRelationships, userToAffiliate);
     affiliateStats[affiliateId] = stats;
   }
   
+  console.log(`📊 Processados ${Object.keys(affiliateStats).length} afiliados`);
   return affiliateStats;
 }
 
-// Função para calcular N1-N5 de um afiliado específico
-function calculateAffiliateN1ToN5(affiliateId, relationships, userToAffiliate) {
+// CORREÇÃO 8: Função corrigida para calcular N1-N5
+function calculateCorrectN1ToN5(affiliateId, directRelationships, userToAffiliate) {
   const levels = { 1: 0, 2: 0, 3: 0, 4: 0, 5: 0 };
-  const visited = new Set();
   
-  function mapLevelsRecursive(currentId, relativeLevel) {
-    if (visited.has(currentId) || relativeLevel > 5) {
-      return; // Evitar loops e limitar a N5
-    }
-    
-    visited.add(currentId);
-    const children = relationships.get(currentId) || [];
-    
-    for (const childId of children) {
-      if (relativeLevel >= 1 && relativeLevel <= 5) {
-        levels[relativeLevel]++;
-      }
-      
-      // Verificar se o child também é um afiliado para continuar a hierarquia
-      if (relationships.has(childId)) {
-        mapLevelsRecursive(childId, relativeLevel + 1);
+  // N1: Indicações diretas do afiliado
+  const n1Users = directRelationships.get(affiliateId) || new Set();
+  levels[1] = n1Users.size;
+  
+  // N2: Indicações dos usuários N1 que também são afiliados
+  const n2Users = new Set();
+  for (const userId of n1Users) {
+    if (directRelationships.has(userId)) {
+      const userReferrals = directRelationships.get(userId) || new Set();
+      for (const referral of userReferrals) {
+        n2Users.add(referral);
       }
     }
   }
+  levels[2] = n2Users.size;
   
-  // Começar a partir do afiliado principal (nível 1)
-  mapLevelsRecursive(affiliateId, 1);
+  // N3: Indicações dos usuários N2 que também são afiliados
+  const n3Users = new Set();
+  for (const userId of n2Users) {
+    if (directRelationships.has(userId)) {
+      const userReferrals = directRelationships.get(userId) || new Set();
+      for (const referral of userReferrals) {
+        n3Users.add(referral);
+      }
+    }
+  }
+  levels[3] = n3Users.size;
   
+  // N4: Indicações dos usuários N3 que também são afiliados
+  const n4Users = new Set();
+  for (const userId of n3Users) {
+    if (directRelationships.has(userId)) {
+      const userReferrals = directRelationships.get(userId) || new Set();
+      for (const referral of userReferrals) {
+        n4Users.add(referral);
+      }
+    }
+  }
+  levels[4] = n4Users.size;
+  
+  // N5: Indicações dos usuários N4 que também são afiliados
+  const n5Users = new Set();
+  for (const userId of n4Users) {
+    if (directRelationships.has(userId)) {
+      const userReferrals = directRelationships.get(userId) || new Set();
+      for (const referral of userReferrals) {
+        n5Users.add(referral);
+      }
+    }
+  }
+  levels[5] = n5Users.size;
+  
+  // CORREÇÃO PRINCIPAL: Total = soma de todos os níveis
   const total = levels[1] + levels[2] + levels[3] + levels[4] + levels[5];
   
   return {
     affiliate_id: affiliateId,
+    total: total, // CORRIGIDO: soma de N1+N2+N3+N4+N5
     n1: levels[1],
     n2: levels[2],
     n3: levels[3],
     n4: levels[4],
     n5: levels[5],
-    total: total
+    registro: '2025-06-20', // Data padrão
+    cpa_pago: 0,
+    rev_pago: 0,
+    total_pago: 0
   };
 }
 
