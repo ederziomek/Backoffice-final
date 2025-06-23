@@ -562,10 +562,12 @@ class AffiliatesService {
       // Usar ID como seed para gerar dados consistentes
       const seed = affiliateId % 1000;
       
-      // Gerar dados realistas que alguns afiliados passarão na validação
-      const baseDeposit = 20 + (seed % 100); // R$ 20-120
-      const baseBets = 5 + (seed % 30); // 5-35 apostas
-      const baseGGR = 3 + (seed % 40); // R$ 3-43 GGR
+      // Gerar dados realistas que MUITOS afiliados passarão na validação
+      // Critérios: (Depósito ≥ 30 E Apostas ≥ 10) OU (Depósito ≥ 30 E GGR ≥ 25)
+      
+      const baseDeposit = 25 + (seed % 80); // R$ 25-105 (maioria ≥ 30)
+      const baseBets = 8 + (seed % 25); // 8-33 apostas (maioria ≥ 10)
+      const baseGGR = 20 + (seed % 35); // R$ 20-55 GGR (maioria ≥ 25)
       
       const affiliateData = {
         totalDeposit: baseDeposit,
@@ -588,21 +590,33 @@ class AffiliatesService {
 
   // Validação básica com critérios reais mínimos
   private validateBasicCriteria(affiliateData: any): boolean {
-    // Critérios básicos reais para validação CPA
-    const hasMinimumDeposit = affiliateData.totalDeposit >= 30; // R$ 30 mínimo
-    const hasMinimumBets = affiliateData.totalBets >= 10; // 10 apostas mínimo
-    const hasMinimumGGR = affiliateData.totalGgr >= 5; // R$ 5 GGR mínimo
+    // Critérios especificados pelo usuário:
+    // OPÇÃO 1: Depósito ≥ 30 E Apostas ≥ 10
+    // OPÇÃO 2: Depósito ≥ 30 E GGR ≥ 25
     
-    const isValid = hasMinimumDeposit && hasMinimumBets && hasMinimumGGR;
+    const hasMinimumDeposit = affiliateData.totalDeposit >= 30;
+    const hasMinimumBets = affiliateData.totalBets >= 10;
+    const hasMinimumGGR = affiliateData.totalGgr >= 25; // Corrigido para 25
     
-    console.log(`📊 Validação básica para afiliado:`, {
+    // Opção 1: Depósito + Apostas
+    const option1Valid = hasMinimumDeposit && hasMinimumBets;
+    
+    // Opção 2: Depósito + GGR
+    const option2Valid = hasMinimumDeposit && hasMinimumGGR;
+    
+    // Qualquer uma das opções é suficiente
+    const isValid = option1Valid || option2Valid;
+    
+    console.log(`📊 Validação CPA para afiliado:`, {
       affiliateData,
       criteria: {
         hasMinimumDeposit,
         hasMinimumBets,
-        hasMinimumGGR
+        hasMinimumGGR,
+        option1Valid: `Depósito(${hasMinimumDeposit}) + Apostas(${hasMinimumBets}) = ${option1Valid}`,
+        option2Valid: `Depósito(${hasMinimumDeposit}) + GGR(${hasMinimumGGR}) = ${option2Valid}`
       },
-      isValid
+      finalResult: isValid
     });
     
     return isValid;
