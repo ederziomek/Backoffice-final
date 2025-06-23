@@ -362,7 +362,6 @@ class CPAIntegration {
   getCacheKey(method, params) {
     return `${method}_${JSON.stringify(params)}`;
   }
-  }
 
   async getCachedData(key, fetchFunction) {
     const cached = this.cache.get(key);
