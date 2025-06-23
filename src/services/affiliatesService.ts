@@ -1,6 +1,8 @@
 import axios from 'axios';
 
 // Configuração da API - usando API local do backoffice
+import { cpaConfigService } from './cpaConfigService';
+
 const API_BASE_URL = process.env.NODE_ENV === 'production' 
   ? '/api'  // API local do backoffice em produção
   : '/api'; // API local do backoffice em desenvolvimento
@@ -517,9 +519,6 @@ class AffiliatesService {
   // Validar se um afiliado tem CPA validado baseado nas regras reais
   private async validateAffiliateForCPA(affiliateId: number): Promise<boolean> {
     try {
-      // Importar serviço de configurações CPA dinamicamente
-      const { cpaConfigService } = await import('./cpaConfigService');
-      
       // Buscar regras de validação ativas
       const activeRule = await cpaConfigService.getActiveValidationRule();
       
