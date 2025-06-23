@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { Users, Network, RefreshCw, AlertCircle, Calendar, Filter, ChevronUp, ChevronDown } from 'lucide-react';
+import { Users, Network, RefreshCw, AlertCircle, Calendar, Filter, ChevronUp, ChevronDown, DollarSign, TrendingUp } from 'lucide-react';
 import { affiliatesService } from '@/services/affiliatesService';
 
 interface MLMAffiliate {
@@ -25,18 +25,10 @@ interface AffiliateStats {
   }>;
 }
 
-interface MLMAffiliate {
-  affiliate_id: number;
-  registro: string;
-  total: number;
-  n1: number;
-  n2: number;
-  n3: number;
-  n4: number;
-  n5: number;
-  cpa_pago: number;
-  rev_pago: number;
-  total_pago: number;
+// Enum para os tipos de visualização
+enum ViewType {
+  INDICACOES = 'indicacoes',
+  CPA_VALIDADOS = 'cpa_validados'
 }
 
 const RealAffiliatesPage: React.FC = () => {
@@ -51,13 +43,16 @@ const RealAffiliatesPage: React.FC = () => {
   const [endDate, setEndDate] = useState<string>('');
   const [sortField, setSortField] = useState<keyof MLMAffiliate | null>(null);
   const [sortDirection, setSortDirection] = useState<'asc' | 'desc'>('desc');
+  
+  // Novo estado para controlar o tipo de visualização
+  const [viewType, setViewType] = useState<ViewType>(ViewType.INDICACOES);
 
   const fetchMLMAffiliates = async (page: number = 1, startDate?: string, endDate?: string) => {
     try {
       setLoading(true);
       setError(null);
       
-      console.log('🔍 Buscando afiliados MLM com filtros de data das indicações:', { page, startDate, endDate });
+      console.log('🔍 Buscando afiliados MLM com filtros de data das indicações:', { page, startDate, endDate, viewType });
       
       // Usar API real com filtros de data das indicações
       const response = await affiliatesService.getAffiliatesMLMLevels(page, 20, startDate, endDate);
@@ -91,6 +86,45 @@ const RealAffiliatesPage: React.FC = () => {
     }
   };
 
+  const fetchCPAValidatedAffiliates = async (page: number = 1, startDate?: string, endDate?: string) => {
+    try {
+      setLoading(true);
+      setError(null);
+      
+      console.log('💰 Buscando afiliados com CPA validados:', { page, startDate, endDate });
+      
+      // Usar novo método específico para CPA validados
+      const response = await affiliatesService.getAffiliatesWithValidatedCPA(page, 20, startDate, endDate);
+      
+      if (response.status === 'success') {
+        const processedData = response.data.map(affiliate => ({
+          ...affiliate,
+          registro: affiliate.registro || new Date().toISOString().split('T')[0],
+          cpa_pago: affiliate.cpa_pago || 0,
+          rev_pago: affiliate.rev_pago || 0,
+          total_pago: (affiliate.cpa_pago || 0) + (affiliate.rev_pago || 0)
+        }));
+
+        setAffiliates(processedData);
+        setTotalPages(response.pagination?.pages || 1);
+        setTotalAffiliates(response.pagination?.total || 0);
+        
+        console.log(`✅ Carregados ${processedData.length} afiliados com CPA validados`);
+        console.log('📊 Debug info:', response.debug);
+        
+      } else {
+        console.error('❌ Resposta da API com status de erro:', response);
+        setError('Erro ao carregar dados dos afiliados com CPA validados');
+      }
+      
+    } catch (error) {
+      console.error('❌ Erro ao buscar afiliados com CPA validados:', error);
+      setError('Erro ao carregar dados dos afiliados com CPA validados');
+    } finally {
+      setLoading(false);
+    }
+  };
+
   const fetchStats = async () => {
     try {
       console.log('📈 Buscando estatísticas...');
@@ -108,26 +142,45 @@ const RealAffiliatesPage: React.FC = () => {
     }
   };
 
+  const handleViewTypeChange = (newViewType: ViewType) => {
+    console.log('🔄 Mudando tipo de visualização:', newViewType);
+    setViewType(newViewType);
+    setCurrentPage(1);
+    
+    // Recarregar dados baseado no tipo de visualização
+    if (newViewType === ViewType.CPA_VALIDADOS) {
+      fetchCPAValidatedAffiliates(1, startDate, endDate);
+    } else {
+      fetchMLMAffiliates(1, startDate, endDate);
+    }
+  };
+
   const handleApplyDateFilter = () => {
     if (!startDate || !endDate) {
       alert('Por favor, selecione tanto a data inicial quanto a data final.');
       return;
     }
     
-    // AVISO: Filtro por data não está disponível na base de dados atual
-    alert('⚠️ AVISO: O filtro por data não está disponível pois a tabela de dados não possui informação temporal. Os dados mostrados são sempre todos os registros disponíveis.');
+    console.log('🎯 Aplicando filtro de data:', { startDate, endDate, viewType });
+    setCurrentPage(1);
     
-    console.log('🎯 Tentativa de aplicar filtro de data (não disponível):', { startDate, endDate });
-    // Não recarregar dados pois o filtro não funciona
-    // setCurrentPage(1);
-    // fetchMLMAffiliates(1, startDate, endDate);
+    if (viewType === ViewType.CPA_VALIDADOS) {
+      fetchCPAValidatedAffiliates(1, startDate, endDate);
+    } else {
+      fetchMLMAffiliates(1, startDate, endDate);
+    }
   };
 
   const handleClearDateFilter = () => {
     setStartDate('');
     setEndDate('');
     setCurrentPage(1);
-    fetchMLMAffiliates(1);
+    
+    if (viewType === ViewType.CPA_VALIDADOS) {
+      fetchCPAValidatedAffiliates(1);
+    } else {
+      fetchMLMAffiliates(1);
+    }
   };
 
   const testConnection = async () => {
@@ -157,23 +210,29 @@ const RealAffiliatesPage: React.FC = () => {
     if (page >= 1 && page <= totalPages) {
       console.log('📄 Mudando para página:', page);
       setCurrentPage(page);
-      // Para filtros locais, não precisamos recarregar dados
-      // Os dados já estão filtrados localmente
+      
+      if (viewType === ViewType.CPA_VALIDADOS) {
+        fetchCPAValidatedAffiliates(page, startDate, endDate);
+      } else {
+        fetchMLMAffiliates(page, startDate, endDate);
+      }
     }
   };
 
   const handleRefresh = async () => {
-    // Recarregar dados originais
-    await Promise.all([
-      fetchMLMAffiliates(1), // Sempre carregar página 1 sem filtros para obter dados originais
-      fetchStats()
-    ]);
+    console.log('🔄 Atualizando dados...');
     
-    // Reaplicar filtro se houver
-    if (startDate || endDate) {
-      setTimeout(() => {
-        handleApplyDateFilter();
-      }, 100);
+    // Recarregar dados baseado no tipo de visualização atual
+    if (viewType === ViewType.CPA_VALIDADOS) {
+      await Promise.all([
+        fetchCPAValidatedAffiliates(1, startDate, endDate),
+        fetchStats()
+      ]);
+    } else {
+      await Promise.all([
+        fetchMLMAffiliates(1, startDate, endDate),
+        fetchStats()
+      ]);
     }
   };
 
@@ -186,6 +245,16 @@ const RealAffiliatesPage: React.FC = () => {
     
     setSortField(field);
     setSortDirection(direction);
+  };
+
+  const getSortIcon = (field: keyof MLMAffiliate) => {
+    if (sortField !== field) {
+      return <ChevronUp className="w-4 h-4 text-gray-500" />;
+    }
+    
+    return sortDirection === 'asc' ? 
+      <ChevronUp className="w-4 h-4 text-cyan-400" /> : 
+      <ChevronDown className="w-4 h-4 text-cyan-400" />;
   };
 
   const sortedAffiliates = React.useMemo(() => {
@@ -203,101 +272,125 @@ const RealAffiliatesPage: React.FC = () => {
     });
   }, [affiliates, sortField, sortDirection]);
 
-  const getSortIcon = (field: keyof MLMAffiliate) => {
-    if (sortField !== field) {
-      return <ChevronDown className="w-4 h-4 text-gray-500" />;
-    }
-    
-    return sortDirection === 'desc' 
-      ? <ChevronDown className="w-4 h-4 text-azul-ciano" />
-      : <ChevronUp className="w-4 h-4 text-azul-ciano" />;
-  };
-
   if (loading) {
     return (
-      <div className="min-h-screen bg-gray-900 text-white p-6">
-        <div className="max-w-7xl mx-auto">
-          <div className="flex items-center justify-center h-64">
-            <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-cyan-400"></div>
-            <span className="ml-3 text-lg">Carregando dados reais dos afiliados...</span>
-          </div>
+      <div className="flex items-center justify-center min-h-screen">
+        <div className="flex flex-col items-center gap-4">
+          <RefreshCw className="w-8 h-8 text-cyan-400 animate-spin" />
+          <p className="text-gray-400">Carregando dados dos afiliados...</p>
         </div>
       </div>
     );
   }
 
   return (
-    <div className="min-h-screen bg-gray-900 text-white p-6">
-      <div className="max-w-7xl mx-auto">
+    <div className="min-h-screen bg-cinza-escuro text-branco">
+      <div className="container mx-auto px-6 py-8">
         {/* Header */}
-        <div className="mb-8">
-          <div className="flex items-center justify-between">
-            <div>
-              <h1 className="text-3xl font-bold text-branco mb-2">Afiliados da Operação</h1>
-              <p className="text-gray-400">
-                Dados reais da tabela tracked - Rede MLM até 5 níveis
-              </p>
-            </div>
+        <div className="flex items-center justify-between mb-8">
+          <div>
+            <h1 className="text-3xl font-bold text-branco mb-2">Afiliados da Operação</h1>
+            <p className="text-gray-400">
+              {viewType === ViewType.CPA_VALIDADOS 
+                ? 'Dados reais de CPA validados - Rede MLM até 5 níveis'
+                : 'Dados reais da tabela trackeds - Rede MLM até 5 níveis'
+              }
+            </p>
+          </div>
+          <button
+            onClick={handleRefresh}
+            disabled={loading}
+            className="flex items-center gap-2 px-4 py-2 bg-azul-ciano hover:bg-cyan-600 disabled:opacity-50 disabled:cursor-not-allowed rounded-lg transition-colors"
+          >
+            <RefreshCw className={`w-4 h-4 ${loading ? 'animate-spin' : ''}`} />
+            Atualizar
+          </button>
+        </div>
+
+        {/* Botões de Alternância */}
+        <div className="mb-6">
+          <div className="flex gap-4">
             <button
-              onClick={handleRefresh}
-              disabled={loading}
-              className="flex items-center gap-2 bg-azul-ciano hover:bg-opacity-80 disabled:opacity-50 px-4 py-2 rounded-lg transition-colors text-branco font-medium"
+              onClick={() => handleViewTypeChange(ViewType.INDICACOES)}
+              className={`flex items-center gap-2 px-6 py-3 rounded-lg font-medium transition-all ${
+                viewType === ViewType.INDICACOES
+                  ? 'bg-azul-ciano text-white shadow-lg'
+                  : 'bg-gray-700 text-gray-300 hover:bg-gray-600'
+              }`}
             >
-              <RefreshCw className={`w-4 h-4 ${loading ? 'animate-spin' : ''}`} />
-              Atualizar
+              <Network className="w-5 h-5" />
+              Indicações
             </button>
+            <button
+              onClick={() => handleViewTypeChange(ViewType.CPA_VALIDADOS)}
+              className={`flex items-center gap-2 px-6 py-3 rounded-lg font-medium transition-all ${
+                viewType === ViewType.CPA_VALIDADOS
+                  ? 'bg-green-600 text-white shadow-lg'
+                  : 'bg-gray-700 text-gray-300 hover:bg-gray-600'
+              }`}
+            >
+              <DollarSign className="w-5 h-5" />
+              CPA Validados
+            </button>
+          </div>
+          
+          {/* Indicador do tipo de visualização */}
+          <div className="mt-3 text-sm text-gray-400">
+            {viewType === ViewType.CPA_VALIDADOS ? (
+              <div className="flex items-center gap-2">
+                <TrendingUp className="w-4 h-4 text-green-400" />
+                <span>Exibindo apenas afiliados com CPA validados e pagos</span>
+              </div>
+            ) : (
+              <div className="flex items-center gap-2">
+                <Network className="w-4 h-4 text-cyan-400" />
+                <span>Exibindo todas as indicações por níveis da rede MLM</span>
+              </div>
+            )}
           </div>
         </div>
 
-        {/* Date Filters */}
-        <div className="mb-8 p-4 bg-gray-800 rounded-lg border border-gray-700">
+        {/* Date Filter */}
+        <div className="bg-gray-800 rounded-lg p-6 mb-8 border border-gray-700">
           <div className="flex items-center gap-2 mb-4">
-            <Filter className="w-5 h-5 text-azul-ciano" />
+            <Calendar className="w-5 h-5 text-cyan-400" />
             <h3 className="text-lg font-semibold text-branco">Filtros de Data</h3>
           </div>
-          <div className="grid grid-cols-1 md:grid-cols-4 gap-4 items-end">
-            <div>
-              <label htmlFor="startDate" className="block text-sm font-medium text-gray-300 mb-1">
+          <div className="flex flex-wrap items-end gap-4">
+            <div className="flex-1 min-w-48">
+              <label className="block text-sm font-medium text-gray-300 mb-2">
                 Data Inicial
               </label>
-              <div className="relative">
-                <Calendar className="absolute left-3 top-1/2 transform -translate-y-1/2 w-4 h-4 text-gray-400" />
-                <input
-                  type="date"
-                  id="startDate"
-                  value={startDate}
-                  onChange={(e) => setStartDate(e.target.value)}
-                  className="w-full pl-10 pr-3 py-2 bg-gray-700 border border-gray-600 rounded-lg focus:border-azul-ciano focus:outline-none text-branco text-sm"
-                />
-              </div>
+              <input
+                type="date"
+                value={startDate}
+                onChange={(e) => setStartDate(e.target.value)}
+                className="w-full px-3 py-2 bg-gray-700 border border-gray-600 rounded-md text-branco focus:outline-none focus:ring-2 focus:ring-cyan-500"
+              />
             </div>
-            <div>
-              <label htmlFor="endDate" className="block text-sm font-medium text-gray-300 mb-1">
+            <div className="flex-1 min-w-48">
+              <label className="block text-sm font-medium text-gray-300 mb-2">
                 Data Final
               </label>
-              <div className="relative">
-                <Calendar className="absolute left-3 top-1/2 transform -translate-y-1/2 w-4 h-4 text-gray-400" />
-                <input
-                  type="date"
-                  id="endDate"
-                  value={endDate}
-                  onChange={(e) => setEndDate(e.target.value)}
-                  className="w-full pl-10 pr-3 py-2 bg-gray-700 border border-gray-600 rounded-lg focus:border-azul-ciano focus:outline-none text-branco text-sm"
-                />
-              </div>
+              <input
+                type="date"
+                value={endDate}
+                onChange={(e) => setEndDate(e.target.value)}
+                className="w-full px-3 py-2 bg-gray-700 border border-gray-600 rounded-md text-branco focus:outline-none focus:ring-2 focus:ring-cyan-500"
+              />
             </div>
-            <div>
+            <div className="flex gap-2">
               <button
                 onClick={handleApplyDateFilter}
-                className="w-full px-4 py-2 bg-azul-ciano hover:bg-opacity-80 text-branco font-medium rounded-lg transition-colors"
+                disabled={!startDate || !endDate}
+                className="flex items-center gap-2 px-4 py-2 bg-azul-ciano hover:bg-cyan-600 disabled:opacity-50 disabled:cursor-not-allowed rounded-md transition-colors"
               >
+                <Filter className="w-4 h-4" />
                 Aplicar Filtro
               </button>
-            </div>
-            <div>
               <button
                 onClick={handleClearDateFilter}
-                className="w-full px-4 py-2 bg-gray-600 hover:bg-gray-700 text-branco font-medium rounded-lg transition-colors"
+                className="flex items-center gap-2 px-4 py-2 bg-gray-600 hover:bg-gray-500 rounded-md transition-colors"
               >
                 Limpar Filtro
               </button>
@@ -324,7 +417,9 @@ const RealAffiliatesPage: React.FC = () => {
           <div className="bg-gray-800 rounded-lg p-6 border border-gray-700">
             <div className="flex items-center justify-between">
               <div>
-                <p className="text-gray-400 text-sm">Afiliados únicos</p>
+                <p className="text-gray-400 text-sm">
+                  {viewType === ViewType.CPA_VALIDADOS ? 'Afiliados com CPA' : 'Afiliados únicos'}
+                </p>
                 <p className="text-2xl font-bold text-white">
                   {(startDate || endDate) ? 
                     affiliates.length.toLocaleString() : 
@@ -332,29 +427,48 @@ const RealAffiliatesPage: React.FC = () => {
                   }
                 </p>
                 <p className="text-xs text-gray-500">
-                  {(startDate || endDate) ? 'No período selecionado' : 'Total de afiliados com rede'}
+                  {viewType === ViewType.CPA_VALIDADOS 
+                    ? 'Com CPA validados e pagos'
+                    : (startDate || endDate) ? 'No período selecionado' : 'Total de afiliados com rede'
+                  }
                 </p>
               </div>
-              <Users className="w-8 h-8 text-cyan-400" />
+              {viewType === ViewType.CPA_VALIDADOS ? (
+                <DollarSign className="w-8 h-8 text-green-400" />
+              ) : (
+                <Users className="w-8 h-8 text-cyan-400" />
+              )}
             </div>
           </div>
 
           <div className="bg-gray-800 rounded-lg p-6 border border-gray-700">
             <div className="flex items-center justify-between">
               <div>
-                <p className="text-gray-400 text-sm">Quantidade de indicações</p>
+                <p className="text-gray-400 text-sm">
+                  {viewType === ViewType.CPA_VALIDADOS ? 'Total CPA Pago' : 'Quantidade de indicações'}
+                </p>
                 <p className="text-2xl font-bold text-white">
-                  {(startDate || endDate) ? 
-                    affiliates.reduce((total, affiliate) => total + affiliate.total, 0).toLocaleString() :
-                    (stats ? stats.total_tracking_records.toLocaleString() : 
-                     affiliates.reduce((total, affiliate) => total + affiliate.total, 0).toLocaleString())
-                  }
+                  {viewType === ViewType.CPA_VALIDADOS ? (
+                    `R$ ${affiliates.reduce((total, affiliate) => total + affiliate.total_pago, 0).toFixed(2)}`
+                  ) : (
+                    (startDate || endDate) ? 
+                      affiliates.reduce((total, affiliate) => total + affiliate.total, 0).toLocaleString() :
+                      (stats ? stats.total_tracking_records.toLocaleString() : 
+                       affiliates.reduce((total, affiliate) => total + affiliate.total, 0).toLocaleString())
+                  )}
                 </p>
                 <p className="text-xs text-gray-500">
-                  {(startDate || endDate) ? 'No período selecionado' : 'Total em todos os níveis'}
+                  {viewType === ViewType.CPA_VALIDADOS 
+                    ? 'Soma de todos os CPAs pagos'
+                    : (startDate || endDate) ? 'No período selecionado' : 'Total em todos os níveis'
+                  }
                 </p>
               </div>
-              <Network className="w-8 h-8 text-green-400" />
+              {viewType === ViewType.CPA_VALIDADOS ? (
+                <TrendingUp className="w-8 h-8 text-green-400" />
+              ) : (
+                <Network className="w-8 h-8 text-green-400" />
+              )}
             </div>
           </div>
         </div>
@@ -372,8 +486,15 @@ const RealAffiliatesPage: React.FC = () => {
         {/* MLM Affiliates Table */}
         <div className="bg-gray-800 rounded-lg border border-gray-700">
           <div className="p-6 border-b border-gray-700">
-            <h2 className="text-xl font-semibold text-branco mb-2">Rede MLM por Afiliado</h2>
-            <p className="text-gray-400">Distribuição de indicações por níveis da rede MLM</p>
+            <h2 className="text-xl font-semibold text-branco mb-2">
+              {viewType === ViewType.CPA_VALIDADOS ? 'CPA Validados por Afiliado' : 'Rede MLM por Afiliado'}
+            </h2>
+            <p className="text-gray-400">
+              {viewType === ViewType.CPA_VALIDADOS 
+                ? 'Afiliados com CPA validados e valores pagos por nível'
+                : 'Distribuição de indicações por níveis da rede MLM'
+              }
+            </p>
           </div>
 
           <div className="overflow-x-auto">
@@ -514,17 +635,29 @@ const RealAffiliatesPage: React.FC = () => {
                         </div>
                       </td>
                       <td className="px-6 py-4 whitespace-nowrap">
-                        <div className="text-sm text-gray-400">
+                        <div className={`text-sm font-medium ${
+                          viewType === ViewType.CPA_VALIDADOS && affiliate.cpa_pago > 0 
+                            ? 'text-green-400' 
+                            : 'text-gray-400'
+                        }`}>
                           R$ {affiliate.cpa_pago.toFixed(2)}
                         </div>
                       </td>
                       <td className="px-6 py-4 whitespace-nowrap">
-                        <div className="text-sm text-gray-400">
+                        <div className={`text-sm font-medium ${
+                          viewType === ViewType.CPA_VALIDADOS && affiliate.rev_pago > 0 
+                            ? 'text-green-400' 
+                            : 'text-gray-400'
+                        }`}>
                           R$ {affiliate.rev_pago.toFixed(2)}
                         </div>
                       </td>
                       <td className="px-6 py-4 whitespace-nowrap">
-                        <div className="text-sm font-medium text-azul-ciano">
+                        <div className={`text-sm font-bold ${
+                          viewType === ViewType.CPA_VALIDADOS && affiliate.total_pago > 0 
+                            ? 'text-green-400' 
+                            : 'text-azul-ciano'
+                        }`}>
                           R$ {affiliate.total_pago.toFixed(2)}
                         </div>
                       </td>
@@ -534,10 +667,22 @@ const RealAffiliatesPage: React.FC = () => {
                   <tr>
                     <td colSpan={11} className="px-6 py-12 text-center bg-gray-800">
                       <div className="flex flex-col items-center justify-center">
-                        <Network className="w-12 h-12 text-gray-500 mb-4" />
-                        <p className="text-gray-400 text-lg">Nenhum afiliado encontrado</p>
+                        {viewType === ViewType.CPA_VALIDADOS ? (
+                          <DollarSign className="w-12 h-12 text-gray-500 mb-4" />
+                        ) : (
+                          <Network className="w-12 h-12 text-gray-500 mb-4" />
+                        )}
+                        <p className="text-gray-400 text-lg">
+                          {viewType === ViewType.CPA_VALIDADOS 
+                            ? 'Nenhum afiliado com CPA validado encontrado'
+                            : 'Nenhum afiliado encontrado'
+                          }
+                        </p>
                         <p className="text-gray-500 text-sm">
-                          Não há afiliados com clientes na rede MLM no momento
+                          {viewType === ViewType.CPA_VALIDADOS 
+                            ? 'Não há afiliados com CPA validados no período selecionado'
+                            : 'Não há afiliados com clientes na rede MLM no momento'
+                          }
                         </p>
                       </div>
                     </td>
@@ -551,7 +696,8 @@ const RealAffiliatesPage: React.FC = () => {
           {totalPages > 1 && (
             <div className="px-6 py-4 border-t border-gray-700 flex items-center justify-between">
               <div className="text-sm text-gray-400">
-                Página {currentPage} de {totalPages} ({totalAffiliates.toLocaleString()} afiliados total)
+                Página {currentPage} de {totalPages} ({totalAffiliates.toLocaleString()} 
+                {viewType === ViewType.CPA_VALIDADOS ? ' afiliados com CPA' : ' afiliados total'})
               </div>
               <div className="flex gap-2">
                 <button

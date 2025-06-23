@@ -273,6 +273,162 @@ class AffiliatesService {
       throw new Error('Falha na conexão com a API local');
     }
   }
+
+  // Buscar afiliados com CPA validados (integração com serviços Railway)
+  async getAffiliatesWithValidatedCPA(
+    page: number = 1, 
+    per_page: number = 20, 
+    startDate?: string, 
+    endDate?: string
+  ): Promise<MLMResponse> {
+    try {
+      console.log(`💰 Buscando afiliados com CPA validados - Página: ${page}, Por página: ${per_page}`);
+      
+      // Construir parâmetros da query
+      let queryParams = `page=${page}&limit=${per_page}`;
+      
+      if (startDate) {
+        queryParams += `&start_date=${startDate}`;
+        console.log(`📅 Filtro data inicial: ${startDate}`);
+      }
+      
+      if (endDate) {
+        queryParams += `&end_date=${endDate}`;
+        console.log(`📅 Filtro data final: ${endDate}`);
+      }
+      
+      // Usar endpoint específico para CPA validados
+      const response = await api.get(`/affiliates/cpa-validated?${queryParams}`);
+      
+      console.log('📊 Resposta dos afiliados com CPA validados:', response.data);
+      
+      return {
+        status: response.data.status,
+        data: response.data.data || [],
+        pagination: response.data.pagination || {
+          page: 1,
+          pages: 1,
+          total: 0,
+          limit: per_page
+        },
+        debug: response.data.debug
+      };
+
+    } catch (error) {
+      console.error('❌ Erro ao buscar afiliados com CPA validados:', error);
+      
+      // Fallback: filtrar dados MLM existentes por CPA > 0
+      console.log('🔄 Usando fallback: filtrando dados MLM por CPA > 0...');
+      try {
+        const mlmResponse = await this.getAffiliatesMLMLevels(page, per_page, startDate, endDate);
+        
+        if (mlmResponse.status === 'success') {
+          // Filtrar apenas afiliados com CPA validados
+          const cpaValidatedData = mlmResponse.data.filter(affiliate => 
+            affiliate.cpa_pago > 0 || affiliate.rev_pago > 0
+          );
+          
+          return {
+            status: 'success',
+            data: cpaValidatedData,
+            pagination: {
+              page: 1,
+              pages: Math.ceil(cpaValidatedData.length / per_page),
+              total: cpaValidatedData.length,
+              limit: per_page
+            },
+            debug: {
+              ...mlmResponse.debug,
+              fallback: true,
+              filtered_by_cpa: true,
+              original_count: mlmResponse.data.length,
+              filtered_count: cpaValidatedData.length
+            }
+          };
+        }
+      } catch (fallbackError) {
+        console.error('❌ Erro no fallback também:', fallbackError);
+      }
+      
+      // Se tudo falhar, retornar estrutura vazia
+      return {
+        status: 'error',
+        data: [],
+        pagination: {
+          page: 1,
+          pages: 1,
+          total: 0,
+          limit: per_page
+        },
+        debug: {
+          error: 'Falha ao carregar dados de CPA validados',
+          fallback_failed: true
+        }
+      };
+    }
+  }
+
+  // Buscar estatísticas de CPA
+  async getCPAStats(): Promise<any> {
+    try {
+      console.log('📈 Buscando estatísticas de CPA...');
+      
+      const response = await api.get('/affiliates/cpa-stats');
+      
+      console.log('📊 Estatísticas de CPA:', response.data);
+      
+      return response.data;
+
+    } catch (error) {
+      console.error('❌ Erro ao buscar estatísticas de CPA:', error);
+      
+      // Fallback: calcular estatísticas básicas dos dados MLM
+      try {
+        const mlmResponse = await this.getAffiliatesMLMLevels(1, 1000); // Buscar mais dados para estatísticas
+        
+        if (mlmResponse.status === 'success') {
+          const cpaAffiliates = mlmResponse.data.filter(affiliate => 
+            affiliate.cpa_pago > 0 || affiliate.rev_pago > 0
+          );
+          
+          const totalCPAPago = cpaAffiliates.reduce((sum, affiliate) => sum + affiliate.cpa_pago, 0);
+          const totalREVPago = cpaAffiliates.reduce((sum, affiliate) => sum + affiliate.rev_pago, 0);
+          
+          return {
+            status: 'success',
+            stats: {
+              total_affiliates_with_cpa: cpaAffiliates.length,
+              total_cpa_paid: totalCPAPago,
+              total_rev_paid: totalREVPago,
+              total_paid: totalCPAPago + totalREVPago,
+              average_cpa_per_affiliate: cpaAffiliates.length > 0 ? totalCPAPago / cpaAffiliates.length : 0
+            },
+            debug: {
+              fallback: true,
+              calculated_from_mlm_data: true
+            }
+          };
+        }
+      } catch (fallbackError) {
+        console.error('❌ Erro no fallback de estatísticas:', fallbackError);
+      }
+      
+      // Retornar estatísticas vazias se tudo falhar
+      return {
+        status: 'error',
+        stats: {
+          total_affiliates_with_cpa: 0,
+          total_cpa_paid: 0,
+          total_rev_paid: 0,
+          total_paid: 0,
+          average_cpa_per_affiliate: 0
+        },
+        debug: {
+          error: 'Falha ao carregar estatísticas de CPA'
+        }
+      };
+    }
+  }
 }
 
 export const affiliatesService = new AffiliatesService();
