@@ -3,6 +3,9 @@ const { Pool } = require('pg');
 const cors = require('cors');
 const path = require('path');
 
+// Importar módulo de integração CPA
+const cpaIntegration = require('./cpa-integration');
+
 const app = express();
 
 // Middleware
@@ -49,6 +52,32 @@ app.get('/api/health', async (req, res) => {
     res.status(500).json({
       status: 'error',
       message: 'Erro de conexão com o banco de dados',
+      error: error.message
+    });
+  }
+});
+
+// Rota para testar conectividade com Sistema CPA
+app.get('/api/cpa/test', async (req, res) => {
+  try {
+    console.log('🔗 Testando conectividade com Sistema CPA...');
+    
+    const connectivity = await cpaIntegration.testConnectivity();
+    const config = await cpaIntegration.getCPAConfig();
+    
+    res.json({
+      status: 'success',
+      message: 'Teste de conectividade CPA concluído',
+      connectivity: connectivity,
+      cpa_config: config,
+      timestamp: new Date().toISOString()
+    });
+    
+  } catch (error) {
+    console.error('❌ Erro no teste CPA:', error);
+    res.status(500).json({
+      status: 'error',
+      message: 'Erro ao testar Sistema CPA',
       error: error.message
     });
   }
@@ -201,26 +230,24 @@ app.get('/api/affiliates/stats', async (req, res) => {
   }
 });
 
-// ALGORITMO MLM CORRIGIDO - Versão Final (SEM FILTRO DE DATA)
-// A tabela tracked não possui coluna created_at, então removemos o filtro por data
+// ALGORITMO MLM INTEGRADO COM SISTEMA CPA - Versão Final
+// Busca dados reais de CPA dos microserviços
 app.get('/api/affiliates/mlm-levels-corrected', async (req, res) => {
   try {
     const page = parseInt(req.query.page) || 1;
     const limit = parseInt(req.query.limit) || 20;
     const offset = (page - 1) * limit;
     
-    // IMPORTANTE: Parâmetros de data são ignorados pois a tabela não tem coluna de data
     const startDate = req.query.start_date;
     const endDate = req.query.end_date;
 
-    console.log(`🔍 Buscando afiliados MLM CORRIGIDOS - Página: ${page}, Limit: ${limit}`);
-    console.log(`⚠️ AVISO: Filtro por data não disponível - tabela tracked não possui coluna created_at`);
+    console.log(`🔍 Buscando afiliados MLM INTEGRADOS COM CPA - Página: ${page}, Limit: ${limit}`);
 
-    // Testar conexão
+    // Testar conexão com banco
     await pool.query('SELECT 1');
     console.log('✅ Conexão com banco PostgreSQL OK');
 
-    // CORREÇÃO: Query simples sem filtro de data (coluna não existe)
+    // Buscar dados da tabela tracked
     const baseQuery = `
       SELECT 
         user_afil as affiliate_id,
@@ -233,29 +260,12 @@ app.get('/api/affiliates/mlm-levels-corrected', async (req, res) => {
       ORDER BY user_afil, user_id
     `;
 
-    console.log(`🔍 Query SQL (sem filtro de data): ${baseQuery}`);
-
-    // Buscar todos os dados (sem filtro de data)
     const trackedResult = await pool.query(baseQuery);
     const trackedData = trackedResult.rows;
     
-    console.log(`📈 Total de registros encontrados: ${trackedData.length}`);
+    console.log(`📈 Total de registros tracked: ${trackedData.length}`);
 
-    // Buscar estatísticas gerais
-    const totalStatsQuery = `
-      SELECT 
-        COUNT(DISTINCT user_afil) as total_affiliates,
-        COUNT(*) as total_indications
-      FROM tracked 
-      WHERE tracked_type_id = 1 
-        AND user_afil IS NOT NULL 
-        AND user_id IS NOT NULL
-    `;
-
-    const totalStatsResult = await pool.query(totalStatsQuery);
-    const totalStats = totalStatsResult.rows[0];
-
-    // Construir hierarquia MLM correta
+    // Construir hierarquia MLM básica
     const affiliateStats = buildCorrectMLMHierarchy(trackedData);
     
     // Filtrar apenas afiliados com indicações
@@ -263,18 +273,49 @@ app.get('/api/affiliates/mlm-levels-corrected', async (req, res) => {
       .filter(affiliate => affiliate.total > 0)
       .sort((a, b) => b.total - a.total);
 
+    console.log(`👥 Afiliados com indicações: ${filteredAffiliates.length}`);
+
+    // INTEGRAÇÃO COM SISTEMA CPA - Buscar dados reais
+    console.log('🔗 Integrando com Sistema CPA...');
+    
+    const affiliateIds = filteredAffiliates.map(a => a.affiliate_id);
+    
+    // Buscar dados CPA reais dos microserviços
+    const cpaData = await cpaIntegration.processCPADataForAffiliates(affiliateIds);
+    
+    console.log(`💰 Dados CPA obtidos para ${Object.keys(cpaData).length} afiliados`);
+
+    // Combinar dados MLM com dados CPA reais
+    const enrichedAffiliates = filteredAffiliates.map(affiliate => {
+      const cpaInfo = cpaData[affiliate.affiliate_id] || {
+        cpa_pago: 0,
+        rev_pago: 0,
+        total_pago: 0,
+        commissions_count: 0
+      };
+
+      return {
+        ...affiliate,
+        cpa_pago: cpaInfo.cpa_pago,
+        rev_pago: cpaInfo.rev_pago,
+        total_pago: cpaInfo.total_pago,
+        commissions_count: cpaInfo.commissions_count
+      };
+    });
+
     // Paginar resultados
-    const paginatedAffiliates = filteredAffiliates.slice(offset, offset + limit);
-    const totalPages = Math.ceil(filteredAffiliates.length / limit);
+    const paginatedAffiliates = enrichedAffiliates.slice(offset, offset + limit);
+    const totalPages = Math.ceil(enrichedAffiliates.length / limit);
 
-    // Calcular estatísticas
-    const totalIndicationsCalculated = filteredAffiliates.reduce((sum, a) => sum + a.total, 0);
-    const totalAffiliatesCalculated = filteredAffiliates.length;
+    // Calcular estatísticas finais
+    const totalIndicationsCalculated = enrichedAffiliates.reduce((sum, a) => sum + a.total, 0);
+    const totalCPAPaid = enrichedAffiliates.reduce((sum, a) => sum + a.cpa_pago, 0);
+    const totalAffiliatesCalculated = enrichedAffiliates.length;
 
-    console.log(`✅ Resultado final:`);
+    console.log(`✅ Resultado final integrado:`);
     console.log(`   - Afiliados processados: ${totalAffiliatesCalculated}`);
-    console.log(`   - Total de indicações calculadas: ${totalIndicationsCalculated}`);
-    console.log(`   - Filtro de data: NÃO DISPONÍVEL (coluna não existe)`);
+    console.log(`   - Total de indicações: ${totalIndicationsCalculated}`);
+    console.log(`   - Total CPA pago: R$ ${totalCPAPaid.toFixed(2)}`);
 
     res.json({
       status: 'success',
@@ -289,32 +330,29 @@ app.get('/api/affiliates/mlm-levels-corrected', async (req, res) => {
         total_tracked_records: trackedData.length,
         total_affiliates_with_indications: totalAffiliatesCalculated,
         total_indications_calculated: totalIndicationsCalculated,
-        algorithm: 'corrected_mlm_without_date_filter',
+        total_cpa_paid: totalCPAPaid,
+        algorithm: 'mlm_integrated_with_cpa_system',
+        cpa_integration: 'enabled',
         date_filter_available: false,
         date_filter_requested: {
           start_date: startDate,
           end_date: endDate
         },
-        warning: 'Tabela tracked não possui coluna created_at - filtro por data não disponível',
-        // Estatísticas gerais
-        general_stats: {
-          total_affiliates: parseInt(totalStats.total_affiliates),
-          total_indications: parseInt(totalStats.total_indications)
-        }
+        warning: 'Tabela tracked não possui coluna created_at - filtro por data não disponível'
       }
     });
 
   } catch (error) {
-    console.error('❌ Erro ao buscar afiliados MLM:', error);
+    console.error('❌ Erro na rota MLM integrada com CPA:', error);
     res.status(500).json({
       status: 'error',
-      message: 'Erro ao buscar afiliados MLM',
+      message: 'Erro ao buscar dados MLM integrados com CPA',
       error: error.message
     });
   }
 });
 
-// CORREÇÃO 7: Função corrigida para construir hierarquia MLM
+// Função corrigida para construir hierarquia MLM
 function buildCorrectMLMHierarchy(trackedData) {
   console.log('🏗️ Construindo hierarquia MLM corrigida...');
   
