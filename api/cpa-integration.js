@@ -292,7 +292,7 @@ class CPAIntegration {
       
       // Testar Config Service
       try {
-        const response = await axios.get(`${CPA_SERVICES.CONFIG_SERVICE}/health`, { timeout: 3000 });
+        const response = await axios.get(`${CPA_SERVICES.CONFIG_SERVICE}/api/v1/health`, { timeout: 3000 });
         results.config_service = 'OK';
         console.log('✅ Config Service: OK');
       } catch (error) {
