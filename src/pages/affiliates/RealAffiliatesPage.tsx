@@ -129,7 +129,10 @@ const RealAffiliatesPage: React.FC = () => {
     try {
       console.log('📈 Buscando estatísticas...');
       
-      const response = await affiliatesService.getAffiliateStats();
+      // Usar estatísticas específicas baseadas no tipo de visualização
+      const response = viewType === ViewType.CPA_VALIDADOS 
+        ? await affiliatesService.getCPAStats()
+        : await affiliatesService.getAffiliateStats();
       
       console.log('📊 Estatísticas recebidas:', response);
       
@@ -153,6 +156,11 @@ const RealAffiliatesPage: React.FC = () => {
     } else {
       fetchMLMAffiliates(1, startDate, endDate);
     }
+    
+    // Recarregar estatísticas após mudança de tipo
+    setTimeout(() => {
+      fetchStats();
+    }, 100);
   };
 
   const handleApplyDateFilter = () => {
