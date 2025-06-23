@@ -77,14 +77,20 @@ export interface MLMResponse {
     limit: number;
   };
   debug?: {
-    total_tracked_records: number;
-    total_affiliates_with_indications: number;
-    total_indications_in_period: number;
-    algorithm: string;
+    total_tracked_records?: number;
+    total_affiliates_with_indications?: number;
+    total_indications_in_period?: number;
+    algorithm?: string;
     date_filter?: {
       start_date?: string;
       end_date?: string;
     };
+    error?: string;
+    fallback?: boolean;
+    filtered_by_cpa?: boolean;
+    original_count?: number;
+    filtered_count?: number;
+    fallback_failed?: boolean;
   };
 }
 
