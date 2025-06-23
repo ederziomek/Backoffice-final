@@ -13,8 +13,7 @@ const railwayApi = axios.create({
   timeout: 30000, // 30 segundos
   headers: {
     'Content-Type': 'application/json',
-    // TODO: Adicionar API Key quando disponível
-    // 'X-API-Key': process.env.RAILWAY_API_KEY
+    'X-API-Key': 'fature-cpa-system-2025-secure-key'
   },
 });
 
@@ -65,7 +64,9 @@ export interface CpaCommissionData {
 
 class CpaConfigService {
   private cache = new Map<string, { data: any; timestamp: number }>();
-  private cacheTimeout = 2 * 60 * 1000; // 2 minutos
+  private cacheTimeout = 5 * 60 * 1000; // 5 minutos (aumentado para reduzir chamadas)
+  private retryAttempts = 3;
+  private retryDelay = 1000; // 1 segundo
 
   // Cache helper
   private getCacheKey(method: string): string {
@@ -81,8 +82,31 @@ class CpaConfigService {
     return null;
   }
 
+  // Método para retry com backoff
+  private async retryRequest<T>(
+    requestFn: () => Promise<T>,
+    attempts: number = this.retryAttempts
+  ): Promise<T> {
+    for (let i = 0; i < attempts; i++) {
+      try {
+        return await requestFn();
+      } catch (error) {
+        console.warn(`⚠️ Tentativa ${i + 1}/${attempts} falhou:`, error);
+        
+        if (i === attempts - 1) {
+          throw error; // Última tentativa, propagar erro
+        }
+        
+        // Aguardar antes da próxima tentativa (backoff exponencial)
+        await new Promise(resolve => setTimeout(resolve, this.retryDelay * Math.pow(2, i)));
+      }
+    }
+    throw new Error('Todas as tentativas falharam');
+  }
+
   private setCachedData(key: string, data: any): void {
     this.cache.set(key, { data, timestamp: Date.now() });
+    console.log('💾 Dados salvos no cache:', key);
   }
 
   // Buscar configurações CPA do Railway Config Service
@@ -94,11 +118,27 @@ class CpaConfigService {
     try {
       console.log('⚙️ Buscando configurações CPA do Railway Config Service...');
       
-      // Tentar buscar configurações do Railway
-      const response = await railwayApi.get(`${RAILWAY_SERVICES.CONFIG}/api/v1/cpa/config`);
+      // Usar retry para buscar configurações do Railway
+      const response = await this.retryRequest(async () => {
+        return await railwayApi.get(`${RAILWAY_SERVICES.CONFIG}/api/v1/cpa/level-amounts`);
+      });
       
       if (response.data && response.data.success) {
-        const config = response.data.data;
+        const cpaLevels = response.data.data;
+        
+        // Converter formato do Config Service para formato esperado
+        const config: CpaConfiguration = {
+          levels: [
+            { level: 1, value: cpaLevels.level_1 || 50.00 },
+            { level: 2, value: cpaLevels.level_2 || 20.00 },
+            { level: 3, value: cpaLevels.level_3 || 5.00 },
+            { level: 4, value: cpaLevels.level_4 || 5.00 },
+            { level: 5, value: cpaLevels.level_5 || 5.00 }
+          ],
+          totalAmount: (cpaLevels.level_1 || 50) + (cpaLevels.level_2 || 20) + (cpaLevels.level_3 || 5) + (cpaLevels.level_4 || 5) + (cpaLevels.level_5 || 5),
+          validationRules: [] // Será buscado separadamente
+        };
+        
         this.setCachedData(cacheKey, config);
         console.log('✅ Configurações CPA carregadas do Railway:', config);
         return config;
@@ -284,8 +324,33 @@ class CpaConfigService {
   // Buscar regras de validação ativas
   async getActiveValidationRule(): Promise<CpaValidationRule | null> {
     try {
-      const config = await this.getCpaConfiguration();
-      return config.activeRule || null;
+      console.log('📋 Buscando regras de validação CPA do Railway...');
+      
+      // Usar retry para buscar regras de validação do Config Service
+      const response = await this.retryRequest(async () => {
+        return await railwayApi.get(`${RAILWAY_SERVICES.CONFIG}/api/v1/cpa/validation-rules`);
+      });
+      
+      if (response.data && response.data.success) {
+        const validationData = response.data.data;
+        console.log('✅ Regras de validação carregadas do Railway:', validationData);
+        
+        // Converter formato do Config Service para formato esperado
+        if (validationData.groups && validationData.groups.length > 0) {
+          const rule: CpaValidationRule = {
+            id: 'railway_rule_1',
+            name: 'Regra Railway',
+            description: 'Regras de validação do Config Service',
+            groups: validationData.groups,
+            groupOperator: validationData.group_operator || 'OR',
+            active: true
+          };
+          return rule;
+        }
+      }
+      
+      // Fallback para regra padrão
+      return null;
     } catch (error) {
       console.error('❌ Erro ao buscar regra de validação ativa:', error);
       return null;
@@ -363,26 +428,34 @@ class CpaConfigService {
       try {
         console.log(`🔍 Testando ${serviceName}: ${serviceUrl}`);
         
-        // Testar diferentes endpoints de health
-        const healthEndpoints = ['/health', '/api/v1/health', '/api/health'];
+        // Testar diferentes endpoints de health com timeout reduzido
+        const healthEndpoints = ['/api/v1/health', '/health', '/api/health'];
         let connected = false;
+        let lastError = null;
         
         for (const endpoint of healthEndpoints) {
           try {
-            const response = await railwayApi.get(`${serviceUrl}${endpoint}`);
+            // Usar timeout menor para testes de conectividade
+            const testApi = axios.create({
+              timeout: 5000, // 5 segundos
+              headers: railwayApi.defaults.headers
+            });
+            
+            const response = await testApi.get(`${serviceUrl}${endpoint}`);
             if (response.status === 200) {
               connected = true;
               console.log(`✅ ${serviceName} conectado via ${endpoint}`);
               break;
             }
-          } catch (endpointError) {
-            // Continuar tentando outros endpoints
+          } catch (endpointError: any) {
+            lastError = endpointError;
+            console.log(`⚠️ ${serviceName}${endpoint}: ${endpointError.message}`);
           }
         }
         
         results[serviceName] = connected;
         if (!connected) {
-          console.log(`❌ ${serviceName} não conectado`);
+          console.log(`❌ ${serviceName} não conectado. Último erro:`, lastError?.message);
         }
         
       } catch (error) {
