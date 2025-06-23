@@ -301,9 +301,6 @@ class AffiliatesService {
     try {
       console.log(`💰 Buscando afiliados com CPA validados - Página: ${page}, Por página: ${per_page}`);
       
-      // Importar serviço de configurações CPA dinamicamente
-      const { cpaConfigService } = await import('./cpaConfigService');
-      
       // Buscar configurações CPA atuais
       const cpaConfig = await cpaConfigService.getCpaLevelValues();
       console.log('⚙️ Configurações CPA carregadas:', cpaConfig);
@@ -387,8 +384,8 @@ class AffiliatesService {
           return {
             ...affiliate,
             cpa_pago: temCPAValidado ? cpaCalculado : 0,
-            rev_pago: temCPAValidado ? cpaCalculado * 0.1 : 0, // 10% do CPA como REV
-            total_pago: temCPAValidado ? cpaCalculado * 1.1 : 0
+            rev_pago: 0, // N/A - ainda não implementado
+            total_pago: temCPAValidado ? cpaCalculado : 0 // Apenas CPA por enquanto
           };
         }));
         
@@ -516,31 +513,33 @@ class AffiliatesService {
     };
   }
 
-  // Validar se um afiliado tem CPA validado baseado nas regras reais
+  // Validar se um afiliado tem CPA validado baseado em dados reais do banco
   private async validateAffiliateForCPA(affiliateId: number): Promise<boolean> {
     try {
-      // Buscar regras de validação ativas
+      console.log(`🔍 Validando CPA para afiliado ${affiliateId} com dados reais...`);
+      
+      // Buscar dados reais do afiliado no banco de dados
+      const affiliateData = await this.getAffiliateRealData(affiliateId);
+      
+      if (!affiliateData) {
+        console.log(`⚠️ Dados do afiliado ${affiliateId} não encontrados`);
+        return false;
+      }
+
+      // Buscar regras de validação ativas do Config Service
       const activeRule = await cpaConfigService.getActiveValidationRule();
       
       if (!activeRule || !activeRule.groups || activeRule.groups.length === 0) {
-        console.log(`⚠️ Nenhuma regra de validação ativa encontrada para afiliado ${affiliateId}`);
-        // Fallback: usar lógica simples baseada no total de indicações
-        return affiliateId % 3 === 0; // Temporário até regras serem configuradas
+        console.log(`⚠️ Nenhuma regra de validação ativa encontrada`);
+        // Usar critérios básicos reais em vez de lógica mockada
+        return this.validateBasicCriteria(affiliateData);
       }
 
-      // Simular dados do jogador para validação
-      // Em produção, estes dados viriam do banco de dados real
-      const playerData = {
-        totalDeposit: Math.random() * 100 + 20, // R$ 20-120
-        totalBets: Math.random() * 50 + 5,      // R$ 5-55
-        totalGgr: Math.random() * 30 + 10       // R$ 10-40 (corrigido: totalGgr)
-      };
-
-      // Validar usando as regras do Config Service
-      const isValid = await cpaConfigService.validatePlayerForCpa(playerData);
+      // Validar usando as regras reais do Config Service
+      const isValid = await cpaConfigService.validatePlayerForCpa(affiliateData);
       
-      console.log(`🔍 Validação CPA para afiliado ${affiliateId}:`, {
-        playerData,
+      console.log(`✅ Validação CPA para afiliado ${affiliateId}:`, {
+        affiliateData,
         isValid,
         rule: activeRule.name
       });
@@ -549,9 +548,63 @@ class AffiliatesService {
       
     } catch (error) {
       console.error(`❌ Erro ao validar CPA para afiliado ${affiliateId}:`, error);
-      // Fallback em caso de erro
-      return affiliateId % 3 === 0;
+      // Em caso de erro, retornar false em vez de lógica mockada
+      return false;
     }
+  }
+
+  // Buscar dados reais do afiliado no banco de dados
+  private async getAffiliateRealData(affiliateId: number): Promise<any> {
+    try {
+      // Buscar dados reais do banco através da API local
+      const response = await api.get(`/affiliates/${affiliateId}/player-data`);
+      
+      if (response.data && response.data.status === 'success') {
+        return response.data.data;
+      }
+      
+      // Se não encontrar dados específicos, buscar dados básicos do afiliado
+      const basicData = await this.getAffiliateDetails(affiliateId);
+      
+      if (basicData && basicData.status === 'success') {
+        // Converter dados básicos para formato esperado
+        return {
+          totalDeposit: basicData.data.total_deposits || 0,
+          totalBets: basicData.data.total_bets || 0,
+          totalGgr: basicData.data.total_ggr || 0,
+          daysActive: basicData.data.days_active || 0,
+          lastActivity: basicData.data.last_activity
+        };
+      }
+      
+      return null;
+      
+    } catch (error) {
+      console.error(`❌ Erro ao buscar dados reais do afiliado ${affiliateId}:`, error);
+      return null;
+    }
+  }
+
+  // Validação básica com critérios reais mínimos
+  private validateBasicCriteria(affiliateData: any): boolean {
+    // Critérios básicos reais para validação CPA
+    const hasMinimumDeposit = affiliateData.totalDeposit >= 30; // R$ 30 mínimo
+    const hasMinimumBets = affiliateData.totalBets >= 10; // 10 apostas mínimo
+    const hasMinimumGGR = affiliateData.totalGgr >= 5; // R$ 5 GGR mínimo
+    
+    const isValid = hasMinimumDeposit && hasMinimumBets && hasMinimumGGR;
+    
+    console.log(`📊 Validação básica para afiliado:`, {
+      affiliateData,
+      criteria: {
+        hasMinimumDeposit,
+        hasMinimumBets,
+        hasMinimumGGR
+      },
+      isValid
+    });
+    
+    return isValid;
   }
 }
 
