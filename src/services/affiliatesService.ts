@@ -325,7 +325,7 @@ class AffiliatesService {
             
             // Calcular valores pagos por nível
             const cpaPago = affiliateCommissions.reduce((total, commission) => total + commission.amount, 0);
-            const revPago = cpaPago * 0.1; // 10% do CPA como REV
+            const revPago = 0; // R$ 0,00 (N/A - conforme solicitado)
             
             return {
               ...affiliate,
