@@ -73,7 +73,6 @@ const initialValidationRules: CpaValidationRule[] = [
 const CpaSettings: React.FC = () => {
   const [cpaValues, setCpaValues] = useState<CpaLevelValue[]>(initialCpaValues);
   const [validationRules, setValidationRules] = useState<CpaValidationRule[]>(initialValidationRules);
-  const [totalCpaAmount, setTotalCpaAmount] = useState<number>(60.00);
 
   const handleCpaValueChange = (index: number, newValue: string) => {
     const updatedValues = [...cpaValues];
@@ -187,22 +186,18 @@ const CpaSettings: React.FC = () => {
         <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
           <div>
             <label className="block text-sm font-medium text-gray-300 mb-2">
-              Valor Total CPA (R$):
+              Total Distribuído (R$):
             </label>
-            <input
-              type="number"
-              value={totalCpaAmount}
-              onChange={(e) => setTotalCpaAmount(parseFloat(e.target.value) || 0)}
-              className="w-full p-2 rounded bg-gray-700 border border-gray-600 focus:border-azul-ciano outline-none"
-              step="0.01"
-            />
+            <div className="p-2 bg-gray-700 rounded border border-gray-600 text-gray-300 font-semibold">
+              R$ {calculateTotal().toFixed(2)}
+            </div>
           </div>
           <div>
             <label className="block text-sm font-medium text-gray-300 mb-2">
-              Total Distribuído (R$):
+              Status:
             </label>
-            <div className="p-2 bg-gray-700 rounded border border-gray-600 text-gray-300">
-              R$ {calculateTotal().toFixed(2)}
+            <div className="p-2 bg-gray-700 rounded border border-gray-600 text-green-400">
+              Configurações Ativas
             </div>
           </div>
         </div>
@@ -212,7 +207,7 @@ const CpaSettings: React.FC = () => {
       <div className="mb-8 p-4 md:p-6 bg-cinza-escuro rounded-lg shadow">
         <h3 className="text-lg lg:text-xl font-semibold text-azul-ciano mb-4">Distribuição CPA por Nível da Rede</h3>
         <p className="text-sm text-gray-400 mb-4">
-          Configure como o valor total de R$ {totalCpaAmount.toFixed(2)} será distribuído entre os 5 níveis da rede de afiliados.
+          Configure como o valor total de R$ {calculateTotal().toFixed(2)} será distribuído entre os 5 níveis da rede de afiliados.
         </p>
         <div className="space-y-3">
           {cpaValues.map((cpa, index) => (
@@ -231,7 +226,7 @@ const CpaSettings: React.FC = () => {
                   step="0.01"
                 />
                 <span className="text-sm text-gray-400">
-                  ({((parseFloat(cpa.value.toString()) || 0) / totalCpaAmount * 100).toFixed(1)}%)
+                  ({calculateTotal() > 0 ? ((parseFloat(cpa.value.toString()) || 0) / calculateTotal() * 100).toFixed(1) : '0.0'}%)
                 </span>
               </div>
             </div>

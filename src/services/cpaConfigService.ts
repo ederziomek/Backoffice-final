@@ -151,13 +151,13 @@ class CpaConfigService {
     // Fallback para configurações baseadas na interface do usuário
     const defaultConfig: CpaConfiguration = {
       levels: [
-        { level: 1, value: 50.00 }, // Baseado na imagem: R$ 50
-        { level: 2, value: 20.00 }, // Baseado na imagem: R$ 20
-        { level: 3, value: 5.00 },  // Baseado na imagem: R$ 5
-        { level: 4, value: 5.00 },  // Baseado na imagem: R$ 5
-        { level: 5, value: 5.00 }   // Baseado na imagem: R$ 5
+        { level: 1, value: 35.00 }, // Atualizado para R$ 35
+        { level: 2, value: 10.00 }, // Atualizado para R$ 10
+        { level: 3, value: 5.00 },  // Mantido R$ 5
+        { level: 4, value: 5.00 },  // Mantido R$ 5
+        { level: 5, value: 5.00 }   // Mantido R$ 5
       ],
-      totalAmount: 85.00, // Baseado na imagem: R$ 85
+      totalAmount: 60.00, // Atualizado para R$ 60 (35+10+5+5+5)
       validationRules: [
         {
           id: 'rule_flexible_1',
@@ -364,11 +364,11 @@ class CpaConfigService {
       
       // Fallback para valores padrão baseados na interface
       return [
-        { level: 1, value: 50.00 },
-        { level: 2, value: 20.00 },
-        { level: 3, value: 5.00 },
-        { level: 4, value: 5.00 },
-        { level: 5, value: 5.00 }
+        { level: 1, value: 35.00 }, // Atualizado para R$ 35
+        { level: 2, value: 10.00 }, // Atualizado para R$ 10
+        { level: 3, value: 5.00 },  // Mantido R$ 5
+        { level: 4, value: 5.00 },  // Mantido R$ 5
+        { level: 5, value: 5.00 }   // Mantido R$ 5
       ];
     }
   }
