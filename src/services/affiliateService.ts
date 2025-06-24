@@ -1,7 +1,7 @@
 import axios from 'axios';
 
 // URL base da API
-const API_GATEWAY_URL = 'https://fature-api-gateway-production.up.railway.app';
+const API_BASE_URL = 'https://fature-affiliate-service-production-87ff.up.railway.app';
 
 // API Key para autenticação
 const API_KEY = 'fature-cpa-system-2025-secure-key';
@@ -278,8 +278,25 @@ export const affiliateService = {
         ...(params.status && params.status !== 'all' && { status: params.status }),
       }).toString();
 
-      const response = await apiClient.get(`${API_GATEWAY_URL}/api/v1/affiliates?${queryString}`);
-      return response.data;
+      const response = await apiClient.get(`${API_BASE_URL}/api/v1/affiliates?${queryString}`);
+      
+      // Adaptar formato da resposta real da API
+      if (response.data.status === 'success') {
+        return {
+          success: true,
+          data: {
+            affiliates: response.data.data || [],
+            pagination: {
+              current_page: response.data.pagination?.page || 1,
+              total_pages: response.data.pagination?.pages || 0,
+              total_items: response.data.pagination?.total || 0,
+              items_per_page: response.data.pagination?.limit || 50
+            }
+          }
+        };
+      } else {
+        throw new Error('API retornou erro');
+      }
     } catch (error) {
       console.warn('API não disponível, usando dados mockados');
       
@@ -326,7 +343,7 @@ export const affiliateService = {
   // Detalhes de um afiliado
   async getAffiliateDetails(id: number): Promise<{ success: boolean; data: { affiliate: Affiliate } }> {
     try {
-      const response = await apiClient.get(`${API_GATEWAY_URL}/api/v1/affiliates/${id}`);
+      const response = await apiClient.get(`${API_BASE_URL}/api/v1/affiliates/${id}`);
       return response.data;
     } catch (error) {
       console.warn('API não disponível, usando dados mockados');
@@ -346,7 +363,7 @@ export const affiliateService = {
   // Estrutura MLM
   async getMLMStructure(id: number): Promise<{ success: boolean; data: MLMStructure }> {
     try {
-      const response = await apiClient.get(`${API_GATEWAY_URL}/api/v1/affiliates/${id}/mlm-structure`);
+      const response = await apiClient.get(`${API_BASE_URL}/api/v1/affiliates/${id}/mlm-structure`);
       return response.data;
     } catch (error) {
       console.warn('API não disponível, usando dados mockados');
@@ -397,7 +414,7 @@ export const affiliateService = {
   // Dashboard do afiliado
   async getAffiliateDashboard(id: number): Promise<{ success: boolean; data: AffiliateDashboard }> {
     try {
-      const response = await apiClient.get(`${API_GATEWAY_URL}/api/v1/affiliates/${id}/dashboard`);
+      const response = await apiClient.get(`${API_BASE_URL}/api/v1/affiliates/${id}/dashboard`);
       return response.data;
     } catch (error) {
       console.warn('API não disponível, usando dados mockados');
@@ -458,8 +475,35 @@ export const affiliateService = {
   // Estatísticas gerais
   async getAffiliateStats(): Promise<{ success: boolean; data: AffiliateStats }> {
     try {
-      const response = await apiClient.get(`${API_GATEWAY_URL}/api/v1/affiliates/stats`);
-      return response.data;
+      const response = await apiClient.get(`${API_BASE_URL}/api/v1/affiliates/stats`);
+      
+      // Adaptar formato da resposta real da API
+      if (response.data.status === 'success') {
+        const apiData = response.data.data.overview;
+        return {
+          success: true,
+          data: {
+            totals: {
+              total_affiliates: apiData.total_affiliates || 0,
+              active_affiliates: apiData.active_affiliates || 0,
+              total_referrals: apiData.total_referrals || 0,
+              total_commission_paid: apiData.total_cpa_earned || 0
+            },
+            growth: {
+              new_affiliates_this_month: 0, // Não disponível na API atual
+              new_referrals_this_month: 0, // Não disponível na API atual
+              growth_rate: 0 // Não disponível na API atual
+            },
+            performance: {
+              average_referrals_per_affiliate: parseFloat(apiData.avg_referrals_per_affiliate || '0'),
+              average_commission_per_affiliate: parseFloat(apiData.avg_cpa_per_affiliate || '0'),
+              top_performer_referrals: 0 // Será calculado dos top_performers se disponível
+            }
+          }
+        };
+      } else {
+        throw new Error('API retornou erro');
+      }
     } catch (error) {
       console.warn('API não disponível, usando dados mockados');
       
@@ -490,8 +534,36 @@ export const affiliateService = {
     } 
   }> {
     try {
-      const response = await apiClient.get(`${API_GATEWAY_URL}/api/v1/affiliates/ranking`);
-      return response.data;
+      const response = await apiClient.get(`${API_BASE_URL}/api/v1/affiliates/ranking`);
+      
+      // Adaptar formato da resposta real da API
+      if (response.data.status === 'success') {
+        const rankings = response.data.data.rankings || [];
+        
+        // Mapear dados da API para o formato esperado
+        const mappedRankings = rankings.map((item: any, index: number) => ({
+          position: index + 1,
+          affiliate_id: item.affiliate_id || item.id,
+          name: item.name || `Afiliado ${item.affiliate_id}`,
+          total_referrals: item.total_referrals || 0,
+          total_commission: item.total_cpa_earned || item.total_commission || 0,
+          level: item.level || 1
+        }));
+        
+        return {
+          success: true,
+          data: {
+            ranking: mappedRankings,
+            user_position: {
+              affiliate_id: 1,
+              position: 1,
+              total_affiliates: rankings.length
+            }
+          }
+        };
+      } else {
+        throw new Error('API retornou erro');
+      }
     } catch (error) {
       console.warn('API não disponível, usando dados mockados');
       
