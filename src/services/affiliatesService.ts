@@ -155,15 +155,10 @@ class AffiliatesService {
       // Retornar estatísticas mockadas baseadas nos dados reais
       return {
         status: 'success',
-        data: {
+        stats: {
           total_affiliates: 48261,
-          total_indications: 2847392,
-          affiliates_with_network: 48261,
-          total_levels: 5
-        },
-        debug: {
-          fallback_used: 'mock_stats',
-          mock_data: true
+          total_tracking_records: 2847392,
+          top_affiliates: []
         }
       };
     }
@@ -235,7 +230,8 @@ class AffiliatesService {
           },
           debug: {
             ...fallbackResponse.data.debug,
-            fallback_used: 'mlm-levels-simple'
+            fallback: true,
+            source: 'mlm-levels-simple'
           }
         };
       } catch (fallbackError) {
@@ -315,7 +311,6 @@ class AffiliatesService {
         const totalMockData = 48261; // Total real que vimos nos testes
         const totalPages = Math.ceil(totalMockData / per_page);
         const startIndex = (page - 1) * per_page;
-        const endIndex = startIndex + per_page;
         
         // Gerar dados adicionais se necessário
         const paginatedData = [];
@@ -339,8 +334,8 @@ class AffiliatesService {
             limit: per_page
           },
           debug: {
-            fallback_used: 'mock_data',
-            mock_data: true,
+            fallback: true,
+            source: 'mock_data',
             total_affiliates_with_indications: totalMockData,
             algorithm: 'mock_fallback'
           }
