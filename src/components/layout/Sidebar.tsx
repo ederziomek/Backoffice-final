@@ -67,6 +67,12 @@ const Sidebar: React.FC<SidebarProps> = ({ isOpen, onClose }) => {
       activeColor: 'text-branco',
     },
     {
+      href: '/#/dash-afiliados',
+      icon: <UserSquare className="w-5 h-5 mr-3 text-purple-400" />,
+      label: 'Dash Afiliados',
+      activeColor: 'text-branco',
+    },
+    {
       href: '/#/affiliates2',
       icon: <UserSquare className="w-5 h-5 mr-3 text-green-400" />,
       label: 'Afiliados2',

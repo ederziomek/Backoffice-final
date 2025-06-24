@@ -7,6 +7,7 @@ import UserListPage from './pages/users/UserListPage';
 import UserFormPage from './pages/users/UserFormPage';
 import AffiliateListPage from './pages/affiliates/AffiliateListPage';
 import RealAffiliatesPage from './pages/affiliates/RealAffiliatesPage';
+import DashAffiliatesPage from './pages/affiliates/DashAffiliatesPage';
 import AffiliateDetailPage from './pages/affiliates/AffiliateDetailPage';
 import AffiliateFormPage from './pages/affiliates/AffiliateFormPage';
 import SettingsPage from './pages/settings/SettingsPage'; // Main page for all settings
@@ -45,6 +46,7 @@ function App() {
               <Route path="/users/logs" element={<UserLogsPage />} />
               <Route path="/affiliates" element={<AffiliateListPage />} />
               <Route path="/affiliates2" element={<RealAffiliatesPage />} />
+              <Route path="/dash-afiliados" element={<DashAffiliatesPage />} />
               <Route path="/affiliates/new" element={<AffiliateFormPage />} />
               <Route path="/affiliates/edit/:affiliateId" element={<AffiliateFormPage />} />
               <Route path="/affiliates/detail/:affiliateId" element={<AffiliateDetailPage />} />
