@@ -1,5 +1,5 @@
 import React, { useEffect, useState } from 'react';
-import { LayoutDashboard, Users, UserSquare, Settings, DollarSign, FolderKanban, Shield, X } from 'lucide-react';
+import { LayoutDashboard, Users, UserSquare, Settings, DollarSign, FolderKanban, Shield, X, Trophy } from 'lucide-react';
 
 interface SidebarProps {
   isOpen: boolean;
@@ -70,6 +70,12 @@ const Sidebar: React.FC<SidebarProps> = ({ isOpen, onClose }) => {
       href: '/#/dash-afiliados',
       icon: <UserSquare className="w-5 h-5 mr-3 text-purple-400" />,
       label: 'Dash Afiliados',
+      activeColor: 'text-branco',
+    },
+    {
+      href: '/#/ranking',
+      icon: <Trophy className="w-5 h-5 mr-3 text-yellow-400" />,
+      label: 'Rankings',
       activeColor: 'text-branco',
     },
     {

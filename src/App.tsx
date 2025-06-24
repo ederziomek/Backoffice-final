@@ -8,6 +8,7 @@ import UserFormPage from './pages/users/UserFormPage';
 import AffiliateListPage from './pages/affiliates/AffiliateListPage';
 import RealAffiliatesPage from './pages/affiliates/RealAffiliatesPage';
 import DashAffiliatesPage from './pages/affiliates/DashAffiliatesPage';
+import RankingPage from './pages/affiliates/RankingPage';
 import AffiliateDetailPage from './pages/affiliates/AffiliateDetailPage';
 import AffiliateFormPage from './pages/affiliates/AffiliateFormPage';
 import SettingsPage from './pages/settings/SettingsPage'; // Main page for all settings
@@ -47,6 +48,7 @@ function App() {
               <Route path="/affiliates" element={<AffiliateListPage />} />
               <Route path="/affiliates2" element={<RealAffiliatesPage />} />
               <Route path="/dash-afiliados" element={<DashAffiliatesPage />} />
+              <Route path="/ranking" element={<RankingPage />} />
               <Route path="/affiliates/new" element={<AffiliateFormPage />} />
               <Route path="/affiliates/edit/:affiliateId" element={<AffiliateFormPage />} />
               <Route path="/affiliates/detail/:affiliateId" element={<AffiliateDetailPage />} />
