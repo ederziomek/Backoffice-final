@@ -230,6 +230,154 @@ app.get('/api/affiliates/stats', async (req, res) => {
   }
 });
 
+// ENDPOINT ULTRA-SIMPLIFICADO PARA TESTE
+app.get('/api/affiliates/mlm-test', async (req, res) => {
+  try {
+    console.log('🔍 Testando endpoint ultra-simplificado');
+
+    // Testar conexão com banco
+    await pool.query('SELECT 1');
+    console.log('✅ Conexão com banco PostgreSQL OK');
+
+    // Buscar apenas alguns afiliados para teste
+    const testQuery = `
+      SELECT 
+        user_afil as affiliate_id,
+        COUNT(DISTINCT user_id) as total_clients
+      FROM tracked 
+      WHERE tracked_type_id = 1 
+        AND user_afil IS NOT NULL 
+        AND user_id IS NOT NULL
+      GROUP BY user_afil
+      HAVING COUNT(DISTINCT user_id) > 0
+      ORDER BY total_clients DESC
+      LIMIT 10
+    `;
+
+    const result = await pool.query(testQuery);
+    
+    const testData = result.rows.map(row => ({
+      affiliate_id: row.affiliate_id,
+      total: row.total_clients,
+      n1: Math.floor(row.total_clients * 0.4),
+      n2: Math.floor(row.total_clients * 0.3),
+      n3: Math.floor(row.total_clients * 0.2),
+      n4: Math.floor(row.total_clients * 0.1),
+      n5: Math.floor(row.total_clients * 0.05),
+      registro: '2025-06-24',
+      cpa_pago: 0,
+      rev_pago: 0,
+      total_pago: 0
+    }));
+
+    console.log(`✅ Retornando ${testData.length} afiliados de teste`);
+
+    res.json({
+      status: 'success',
+      data: testData,
+      pagination: {
+        page: 1,
+        pages: 1,
+        total: testData.length,
+        limit: 10
+      },
+      debug: {
+        algorithm: 'ultra_simple_test',
+        total_found: testData.length
+      }
+    });
+
+  } catch (error) {
+    console.error('❌ Erro no endpoint de teste:', error);
+    res.status(500).json({
+      status: 'error',
+      message: 'Erro no endpoint de teste',
+      error: error.message
+    });
+  }
+});
+
+// ENDPOINT SIMPLIFICADO PARA INDICAÇÕES (SEM INTEGRAÇÃO CPA)
+app.get('/api/affiliates/mlm-levels-simple', async (req, res) => {
+  try {
+    const page = parseInt(req.query.page) || 1;
+    const limit = parseInt(req.query.limit) || 20;
+    const offset = (page - 1) * limit;
+
+    console.log(`🔍 Buscando afiliados MLM SIMPLES - Página: ${page}, Limit: ${limit}`);
+
+    // Testar conexão com banco
+    await pool.query('SELECT 1');
+    console.log('✅ Conexão com banco PostgreSQL OK');
+
+    // Buscar dados da tabela tracked
+    const baseQuery = `
+      SELECT 
+        user_afil as affiliate_id,
+        user_id as referred_user_id,
+        tracked_type_id
+      FROM tracked 
+      WHERE tracked_type_id = 1 
+        AND user_afil IS NOT NULL 
+        AND user_id IS NOT NULL
+      ORDER BY user_afil, user_id
+    `;
+
+    const trackedResult = await pool.query(baseQuery);
+    const trackedData = trackedResult.rows;
+    
+    console.log(`📈 Total de registros tracked: ${trackedData.length}`);
+
+    // Construir hierarquia MLM básica
+    const affiliateStats = buildCorrectMLMHierarchy(trackedData);
+    
+    // Filtrar apenas afiliados com indicações
+    const filteredAffiliates = Object.values(affiliateStats)
+      .filter(affiliate => affiliate.total > 0)
+      .sort((a, b) => b.total - a.total);
+
+    console.log(`👥 Afiliados com indicações: ${filteredAffiliates.length}`);
+
+    // Paginar resultados
+    const paginatedAffiliates = filteredAffiliates.slice(offset, offset + limit);
+    const totalPages = Math.ceil(filteredAffiliates.length / limit);
+
+    // Calcular estatísticas finais
+    const totalIndicationsCalculated = filteredAffiliates.reduce((sum, a) => sum + a.total, 0);
+    const totalAffiliatesCalculated = filteredAffiliates.length;
+
+    console.log(`✅ Resultado final:`);
+    console.log(`   - Afiliados processados: ${totalAffiliatesCalculated}`);
+    console.log(`   - Total de indicações: ${totalIndicationsCalculated}`);
+
+    res.json({
+      status: 'success',
+      data: paginatedAffiliates,
+      pagination: {
+        page: page,
+        pages: totalPages,
+        total: totalAffiliatesCalculated,
+        limit: limit
+      },
+      debug: {
+        total_tracked_records: trackedData.length,
+        total_affiliates_with_indications: totalAffiliatesCalculated,
+        total_indications_calculated: totalIndicationsCalculated,
+        algorithm: 'mlm_simple_fast',
+        cpa_integration: 'disabled'
+      }
+    });
+
+  } catch (error) {
+    console.error('❌ Erro na rota MLM simples:', error);
+    res.status(500).json({
+      status: 'error',
+      message: 'Erro ao buscar dados MLM simples',
+      error: error.message
+    });
+  }
+});
+
 // ALGORITMO MLM INTEGRADO COM SISTEMA CPA - Versão Final
 // Busca dados reais de CPA dos microserviços
 app.get('/api/affiliates/mlm-levels-corrected', async (req, res) => {
