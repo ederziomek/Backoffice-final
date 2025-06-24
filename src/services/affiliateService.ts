@@ -1,8 +1,7 @@
 import axios from 'axios';
 
-// URLs base das APIs
+// URL base da API
 const API_GATEWAY_URL = 'https://fature-api-gateway-production.up.railway.app';
-const AFFILIATE_SERVICE_URL = 'https://fature-affiliate-service-production-87ff.up.railway.app';
 
 // Configuração do axios
 const apiClient = axios.create({

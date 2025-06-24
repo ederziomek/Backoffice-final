@@ -1,5 +1,5 @@
 import React from 'react';
-import { X, User, Mail, Phone, Calendar, CreditCard, MapPin, CheckCircle, XCircle } from 'lucide-react';
+import { X, User, Mail, Phone, Calendar, CreditCard, CheckCircle, XCircle } from 'lucide-react';
 import { useAffiliateDetails } from '../../../hooks/useAffiliates';
 import { 
   formatCurrency, 
