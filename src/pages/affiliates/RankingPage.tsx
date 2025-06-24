@@ -54,7 +54,6 @@ const mockRankingData = {
 
 const RankingPage: React.FC = () => {
   const [loading, setLoading] = useState(true);
-  const [error, setError] = useState<string | null>(null);
   const [rankingData, setRankingData] = useState<typeof mockRankingData | null>(null);
 
   useEffect(() => {
@@ -115,32 +114,6 @@ const RankingPage: React.FC = () => {
         
         <div className="flex items-center justify-center py-12">
           <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-azul-ciano"></div>
-        </div>
-      </div>
-    );
-  }
-
-  if (error) {
-    return (
-      <div className="space-y-6">
-        <div className="flex flex-col lg:flex-row lg:items-center lg:justify-between">
-          <div>
-            <h1 className="text-3xl font-bold text-branco mb-2">Ranking de Afiliados</h1>
-            <p className="text-gray-400">
-              Classificação dos melhores afiliados por performance
-            </p>
-          </div>
-          
-          <button
-            onClick={handleRefresh}
-            className="px-4 py-2 bg-azul-ciano text-white rounded-lg hover:bg-blue-600 transition-colors mt-4 lg:mt-0"
-          >
-            Tentar Novamente
-          </button>
-        </div>
-        
-        <div className="bg-red-900/20 border border-red-500 rounded-lg p-4">
-          <p className="text-red-400">Erro ao carregar ranking: {error}</p>
         </div>
       </div>
     );
