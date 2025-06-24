@@ -8,12 +8,15 @@ const RAILWAY_SERVICES = {
   DATA: 'https://fature-data-service-v2-production.up.railway.app'
 };
 
+// API Key para autenticação
+const API_KEY = 'fature-cpa-system-2025-secure-key';
+
 // Configuração do axios para Railway
 const railwayApi = axios.create({
   timeout: 30000, // 30 segundos
   headers: {
     'Content-Type': 'application/json',
-    'X-API-Key': 'fature-cpa-system-2025-secure-key'
+    'X-API-Key': API_KEY
   },
 });
 
