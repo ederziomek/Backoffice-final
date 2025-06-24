@@ -55,10 +55,8 @@ const RealAffiliatesPage: React.FC = () => {
       
       console.log('🔍 Buscando afiliados MLM com filtros de data das indicações:', { page, startDate, endDate, viewType });
       
-      // Usar novo método com filtro de data se as datas estiverem definidas
-      const response = (startDate && endDate) 
-        ? await affiliatesService.getAffiliatesWithDateFilter(page, 20, startDate, endDate)
-        : await affiliatesService.getAffiliatesMLMLevels(page, 20, startDate, endDate);
+      // Usar API real com filtros de data das indicações
+      const response = await affiliatesService.getAffiliatesMLMLevels(page, 20, startDate, endDate);
       
       if (response.status === 'success') {
         const processedData = response.data.map(affiliate => ({
