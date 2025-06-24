@@ -1,5 +1,6 @@
-import React, { useState } from 'react';
-import { Plus, Trash2, Save } from 'lucide-react';
+import React, { useState, useEffect } from 'react';
+import { Plus, Trash2, Save, Loader2, AlertCircle } from 'lucide-react';
+import cpaConfigService from '../../services/cpaConfigService';
 
 interface CpaLevelValue {
   level: number;
@@ -29,7 +30,8 @@ interface CpaValidationRule {
   active: boolean;
 }
 
-const initialCpaValues: CpaLevelValue[] = [
+// Valores padrão como fallback
+const fallbackCpaValues: CpaLevelValue[] = [
   { level: 1, value: 35.00 }, // R$ 35,00 - Afiliado da indicação direta
   { level: 2, value: 10.00 }, // R$ 10,00 - Upline do nível 1
   { level: 3, value: 5.00 },  // R$ 5,00  - Upline do nível 2
@@ -38,7 +40,7 @@ const initialCpaValues: CpaLevelValue[] = [
 ];
 
 // Configuração padrão conforme solicitado pelo usuário
-const initialValidationRules: CpaValidationRule[] = [
+const fallbackValidationRules: CpaValidationRule[] = [
   {
     id: 'rule_flexible_1',
     name: 'Modelo Flexível (Padrão)',
@@ -71,24 +73,106 @@ const initialValidationRules: CpaValidationRule[] = [
 ];
 
 const CpaSettings: React.FC = () => {
-  const [cpaValues, setCpaValues] = useState<CpaLevelValue[]>(initialCpaValues);
-  const [validationRules, setValidationRules] = useState<CpaValidationRule[]>(initialValidationRules);
+  const [cpaValues, setCpaValues] = useState<CpaLevelValue[]>(fallbackCpaValues);
+  const [validationRules, setValidationRules] = useState<CpaValidationRule[]>(fallbackValidationRules);
+  const [loading, setLoading] = useState(true);
+  const [saving, setSaving] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const [lastSaved, setLastSaved] = useState<Date | null>(null);
+
+  // Carregar configurações na inicialização
+  useEffect(() => {
+    loadCpaConfiguration();
+  }, []);
+
+  const loadCpaConfiguration = async () => {
+    try {
+      setLoading(true);
+      setError(null);
+      
+      console.log('🔄 Carregando configurações CPA do Config Service...');
+      
+      // Carregar configurações do Config Service
+      const config = await cpaConfigService.getCpaConfiguration();
+      
+      if (config && config.levels) {
+        // Converter formato do Config Service para formato do componente
+        const loadedValues: CpaLevelValue[] = config.levels.map(level => ({
+          level: level.level,
+          value: level.value
+        }));
+        
+        setCpaValues(loadedValues);
+        console.log('✅ Configurações CPA carregadas:', loadedValues);
+      }
+      
+      if (config && config.validationRules && config.validationRules.length > 0) {
+        setValidationRules(config.validationRules);
+        console.log('✅ Regras de validação carregadas:', config.validationRules);
+      }
+      
+    } catch (error) {
+      console.error('❌ Erro ao carregar configurações CPA:', error);
+      setError('Erro ao carregar configurações. Usando valores padrão.');
+      
+      // Usar valores padrão em caso de erro
+      setCpaValues(fallbackCpaValues);
+      setValidationRules(fallbackValidationRules);
+    } finally {
+      setLoading(false);
+    }
+  };
 
   const handleCpaValueChange = (index: number, newValue: string) => {
     const updatedValues = [...cpaValues];
     updatedValues[index].value = parseFloat(newValue) || 0;
     setCpaValues(updatedValues);
+    setError(null); // Limpar erro quando usuário faz alterações
   };
 
   const calculateTotal = () => {
     return cpaValues.reduce((sum, cpa) => sum + (parseFloat(cpa.value.toString()) || 0), 0);
   };
 
-  const handleSaveCpaValues = () => {
-    const total = calculateTotal();
-    console.log('Saving CPA Values:', { cpaValues, total });
-    alert(`Configurações de CPA salvas! Total: R$ ${total.toFixed(2)}`);
+  const handleSaveCpaValues = async () => {
+    try {
+      setSaving(true);
+      setError(null);
+      
+      console.log('💾 Salvando configurações CPA...');
+      
+      // Converter formato do componente para formato do Config Service
+      const configToSave = {
+        levels: cpaValues.map(cpa => ({
+          level: cpa.level,
+          value: parseFloat(cpa.value.toString()) || 0
+        })),
+        totalAmount: calculateTotal(),
+        validationRules: validationRules
+      };
+      
+      // Salvar no Config Service usando método real
+      const result = await cpaConfigService.saveCpaConfiguration(configToSave);
+      
+      if (result.success) {
+        setLastSaved(new Date());
+        console.log('✅ Configurações CPA salvas com sucesso!');
+        alert(`✅ ${result.message}\nSalvo em: ${new Date().toLocaleString()}`);
+      } else {
+        setError(result.message);
+        alert(`⚠️ ${result.message}`);
+      }
+      
+    } catch (error) {
+      console.error('❌ Erro ao salvar configurações CPA:', error);
+      setError('Erro ao salvar configurações. Tente novamente.');
+      alert('❌ Erro ao salvar configurações. Verifique a conexão e tente novamente.');
+    } finally {
+      setSaving(false);
+    }
   };
+
+  // Remover função auxiliar não utilizada
 
   // Funções para gerenciar regras de validação
   const handleRuleToggle = (ruleIndex: number) => {
@@ -180,32 +264,69 @@ const CpaSettings: React.FC = () => {
     <div className="p-1 md:p-6 bg-cinza-claro rounded-lg shadow-md min-h-[400px]">
       <h2 className="text-xl lg:text-2xl font-semibold text-branco mb-6 font-sora">Gerenciamento de CPA</h2>
 
-      {/* Informações Gerais */}
-      <div className="mb-8 p-4 md:p-6 bg-cinza-escuro rounded-lg shadow">
-        <h3 className="text-lg lg:text-xl font-semibold text-azul-ciano mb-4">Configurações Gerais</h3>
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-          <div>
-            <label className="block text-sm font-medium text-gray-300 mb-2">
-              Total Distribuído (R$):
-            </label>
-            <div className="p-2 bg-gray-700 rounded border border-gray-600 text-gray-300 font-semibold">
-              R$ {calculateTotal().toFixed(2)}
-            </div>
-          </div>
-          <div>
-            <label className="block text-sm font-medium text-gray-300 mb-2">
-              Status:
-            </label>
-            <div className="p-2 bg-gray-700 rounded border border-gray-600 text-green-400">
-              Configurações Ativas
-            </div>
-          </div>
+      {/* Loading State */}
+      {loading && (
+        <div className="flex items-center justify-center py-8">
+          <Loader2 className="w-8 h-8 animate-spin text-azul-ciano mr-3" />
+          <span className="text-gray-300">Carregando configurações CPA...</span>
         </div>
-      </div>
+      )}
 
-      {/* Distribuição por Níveis */}
-      <div className="mb-8 p-4 md:p-6 bg-cinza-escuro rounded-lg shadow">
-        <h3 className="text-lg lg:text-xl font-semibold text-azul-ciano mb-4">Distribuição CPA por Nível da Rede</h3>
+      {/* Error State */}
+      {error && (
+        <div className="mb-6 p-4 bg-red-900/20 border border-red-500 rounded-lg flex items-center">
+          <AlertCircle className="w-5 h-5 text-red-400 mr-3" />
+          <span className="text-red-300">{error}</span>
+          <button 
+            onClick={loadCpaConfiguration}
+            className="ml-auto px-3 py-1 text-sm bg-red-600 hover:bg-red-700 text-white rounded"
+          >
+            Tentar Novamente
+          </button>
+        </div>
+      )}
+
+      {!loading && (
+        <>
+          {/* Informações Gerais */}
+          <div className="mb-8 p-4 md:p-6 bg-cinza-escuro rounded-lg shadow">
+            <h3 className="text-lg lg:text-xl font-semibold text-azul-ciano mb-4">Configurações Gerais</h3>
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+              <div>
+                <label className="block text-sm font-medium text-gray-300 mb-2">
+                  Total Distribuído (R$):
+                </label>
+                <div className="p-2 bg-gray-700 rounded border border-gray-600 text-gray-300 font-semibold">
+                  R$ {calculateTotal().toFixed(2)}
+                </div>
+              </div>
+              <div>
+                <label className="block text-sm font-medium text-gray-300 mb-2">
+                  Status:
+                </label>
+                <div className={`p-2 rounded border border-gray-600 ${
+                  error ? 'bg-red-900/20 text-red-400' : 
+                  saving ? 'bg-yellow-900/20 text-yellow-400' :
+                  'bg-gray-700 text-green-400'
+                }`}>
+                  {error ? 'Erro na Conexão' : 
+                   saving ? 'Salvando...' : 
+                   'Configurações Ativas'}
+                </div>
+              </div>
+            </div>
+            
+            {/* Informações de última atualização */}
+            {lastSaved && (
+              <div className="mt-4 text-sm text-gray-400">
+                Última atualização: {lastSaved.toLocaleString()}
+              </div>
+            )}
+          </div>
+
+          {/* Distribuição por Níveis */}
+          <div className="mb-8 p-4 md:p-6 bg-cinza-escuro rounded-lg shadow">
+            <h3 className="text-lg lg:text-xl font-semibold text-azul-ciano mb-4">Distribuição CPA por Nível da Rede</h3>
         <p className="text-sm text-gray-400 mb-4">
           Configure como o valor total de R$ {calculateTotal().toFixed(2)} será distribuído entre os 5 níveis da rede de afiliados.
         </p>
@@ -235,13 +356,24 @@ const CpaSettings: React.FC = () => {
         <div className="mt-6 flex justify-end">
           <button
             onClick={handleSaveCpaValues}
-            className="flex items-center gap-2 px-5 py-2 text-sm font-bold text-branco bg-azul-ciano rounded-md hover:bg-opacity-80"
+            disabled={saving}
+            className={`flex items-center gap-2 px-5 py-2 text-sm font-bold text-branco rounded-md ${
+              saving 
+                ? 'bg-gray-600 cursor-not-allowed' 
+                : 'bg-azul-ciano hover:bg-opacity-80'
+            }`}
           >
-            <Save className="w-4 h-4" />
-            Salvar Distribuição CPA
+            {saving ? (
+              <Loader2 className="w-4 h-4 animate-spin" />
+            ) : (
+              <Save className="w-4 h-4" />
+            )}
+            {saving ? 'Salvando...' : 'Salvar Distribuição CPA'}
           </button>
         </div>
       </div>
+        </>
+      )}
 
       {/* Modelos de Validação Flexíveis */}
       <div className="p-4 md:p-6 bg-cinza-escuro rounded-lg shadow">

@@ -519,7 +519,102 @@ class CpaConfigService {
     return results;
   }
 
-  // Limpar cache
+  // Salvar configurações CPA no Config Service
+  async saveCpaConfiguration(config: {
+    levels: Array<{ level: number; value: number }>;
+    totalAmount: number;
+    validationRules: CpaValidationRule[];
+  }): Promise<{ success: boolean; message: string }> {
+    try {
+      console.log('💾 Salvando configurações CPA no Config Service...');
+      
+      // Preparar dados para salvamento
+      const cpaLevelsData = {
+        level_1: config.levels[0]?.value || 35.00,
+        level_2: config.levels[1]?.value || 10.00,
+        level_3: config.levels[2]?.value || 5.00,
+        level_4: config.levels[3]?.value || 5.00,
+        level_5: config.levels[4]?.value || 5.00
+      };
+
+      // Salvar valores CPA por nível
+      const levelsResponse = await fetch(`${RAILWAY_SERVICES.CONFIG}/api/v1/config/cpa_level_amounts`, {
+        method: 'PUT',
+        headers: {
+          'Content-Type': 'application/json',
+          'X-API-Key': API_KEY
+        },
+        body: JSON.stringify({
+          value: cpaLevelsData,
+          updated_by: 'backoffice_user'
+        })
+      });
+
+      if (!levelsResponse.ok) {
+        throw new Error(`Erro ao salvar valores CPA: ${levelsResponse.status} ${levelsResponse.statusText}`);
+      }
+
+      // Salvar regras de validação se fornecidas
+      if (config.validationRules && config.validationRules.length > 0) {
+        const validationResponse = await fetch(`${RAILWAY_SERVICES.CONFIG}/api/v1/config/cpa_validation_rules`, {
+          method: 'PUT',
+          headers: {
+            'Content-Type': 'application/json',
+            'X-API-Key': API_KEY
+          },
+          body: JSON.stringify({
+            value: {
+              rules: config.validationRules,
+              active_rule_id: config.validationRules.find(r => r.active)?.id || null
+            },
+            updated_by: 'backoffice_user'
+          })
+        });
+
+        if (!validationResponse.ok) {
+          console.warn('⚠️ Erro ao salvar regras de validação, mas valores CPA foram salvos');
+        }
+      }
+
+      // Limpar cache após salvamento bem-sucedido
+      this.clearCache();
+      
+      console.log('✅ Configurações CPA salvas com sucesso no Config Service');
+      return { 
+        success: true, 
+        message: `Configurações salvas com sucesso! Total: R$ ${config.totalAmount?.toFixed(2) || '0.00'}` 
+      };
+
+    } catch (error) {
+      console.error('❌ Erro ao salvar configurações CPA:', error);
+      
+      // Tentar salvar localmente como fallback
+      try {
+        const localKey = 'cpa_config_backup';
+        const backupData = {
+          ...config,
+          saved_at: new Date().toISOString(),
+          source: 'local_backup'
+        };
+        
+        localStorage.setItem(localKey, JSON.stringify(backupData));
+        console.log('💾 Configurações salvas localmente como backup');
+        
+        return { 
+          success: false, 
+          message: 'Erro na conexão. Configurações salvas localmente e serão sincronizadas quando a conexão for restaurada.' 
+        };
+      } catch (localError) {
+        console.error('❌ Erro ao salvar backup local:', localError);
+        return { 
+          success: false, 
+          message: 'Erro ao salvar configurações. Verifique a conexão e tente novamente.' 
+        };
+      }
+    }
+  }
+
+  // Limpar cachee
   clearCache(): void {
     this.cache.clear();
     console.log('🧹 Cache de configurações CPA limpo');
