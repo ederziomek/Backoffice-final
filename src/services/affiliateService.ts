@@ -3,11 +3,15 @@ import axios from 'axios';
 // URL base da API
 const API_GATEWAY_URL = 'https://fature-api-gateway-production.up.railway.app';
 
+// API Key para autenticação
+const API_KEY = 'fature-cpa-system-2025-secure-key';
+
 // Configuração do axios
 const apiClient = axios.create({
   timeout: 10000,
   headers: {
     'Content-Type': 'application/json',
+    'X-API-Key': API_KEY,
   },
 });
 
