@@ -157,7 +157,7 @@ class AffiliatesService {
         status: 'success',
         stats: {
           total_affiliates: 48261,
-          total_tracking_records: 2847392,
+          total_tracking_records: 614944, // Valor real aproximado do banco
           top_affiliates: []
         }
       };
@@ -464,10 +464,10 @@ class AffiliatesService {
           return {
             status: 'success',
             data: cpaValidatedData,
-            pagination: railwayMlmData.pagination || {
-              page: 1,
-              pages: Math.ceil(cpaValidatedData.length / per_page),
-              total: cpaValidatedData.length,
+            pagination: {
+              page: page,
+              pages: railwayMlmData.pagination?.pages || Math.ceil(railwayMlmData.pagination?.total || cpaValidatedData.length / per_page),
+              total: railwayMlmData.pagination?.total || cpaValidatedData.length,
               limit: per_page
             },
             debug: {
@@ -519,9 +519,9 @@ class AffiliatesService {
           status: 'success',
           data: cpaValidatedData,
           pagination: {
-            page: 1,
-            pages: Math.ceil(cpaValidatedData.length / per_page),
-            total: cpaValidatedData.length,
+            page: page,
+            pages: mlmResponse.pagination?.pages || Math.ceil(mlmResponse.pagination?.total || cpaValidatedData.length / per_page),
+            total: mlmResponse.pagination?.total || cpaValidatedData.length,
             limit: per_page
           },
           debug: {

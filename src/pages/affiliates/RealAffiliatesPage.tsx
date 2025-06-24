@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { Users, Network, RefreshCw, AlertCircle, Calendar, Filter, ChevronUp, ChevronDown, DollarSign, TrendingUp } from 'lucide-react';
 import { affiliatesService } from '@/services/affiliatesService';
+import { formatCurrency, formatNumber } from '@/utils/formatters';
 
 interface MLMAffiliate {
   affiliate_id: number;
@@ -457,11 +458,11 @@ const RealAffiliatesPage: React.FC = () => {
                 </p>
                 <p className="text-2xl font-bold text-white">
                   {viewType === ViewType.CPA_VALIDADOS ? (
-                    `R$ ${affiliates.reduce((total, affiliate) => total + affiliate.total_pago, 0).toFixed(2)}`
+                    formatCurrency(affiliates.reduce((total, affiliate) => total + affiliate.total_pago, 0))
                   ) : (
                     (startDate || endDate) ? 
-                      affiliates.reduce((total, affiliate) => total + affiliate.total, 0).toLocaleString() :
-                      (stats ? stats.total_tracking_records.toLocaleString() : 
+                      formatNumber(affiliates.reduce((total, affiliate) => total + affiliate.total, 0)) :
+                      (stats ? formatNumber(stats.total_tracking_records) : 
                        affiliates.reduce((total, affiliate) => total + affiliate.total, 0).toLocaleString())
                   )}
                 </p>
@@ -648,7 +649,7 @@ const RealAffiliatesPage: React.FC = () => {
                             ? 'text-green-400' 
                             : 'text-gray-400'
                         }`}>
-                          R$ {affiliate.cpa_pago.toFixed(2)}
+                          {formatCurrency(affiliate.cpa_pago)}
                         </div>
                       </td>
                       <td className="px-6 py-4 whitespace-nowrap">
@@ -657,7 +658,7 @@ const RealAffiliatesPage: React.FC = () => {
                             ? 'text-green-400' 
                             : 'text-gray-400'
                         }`}>
-                          R$ {affiliate.rev_pago.toFixed(2)}
+                          {formatCurrency(affiliate.rev_pago)}
                         </div>
                       </td>
                       <td className="px-6 py-4 whitespace-nowrap">
@@ -666,7 +667,7 @@ const RealAffiliatesPage: React.FC = () => {
                             ? 'text-green-400' 
                             : 'text-azul-ciano'
                         }`}>
-                          R$ {affiliate.total_pago.toFixed(2)}
+                          {formatCurrency(affiliate.total_pago)}
                         </div>
                       </td>
                     </tr>
