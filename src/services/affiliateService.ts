@@ -265,57 +265,40 @@ export const affiliateService = {
       const response = await apiClient.get(`${API_BASE_URL}/api/v1/affiliates/${id}/dashboard`);
       return response.data;
     } catch (error) {
-      console.warn('API não disponível, usando dados mockados');
+      console.warn('API não disponível, retornando dashboard vazio');
       
-      const affiliate = mockAffiliates.find(a => a.id === id);
-      if (!affiliate) {
-        throw new Error('Afiliado não encontrado');
-      }
-      
-      const mockDashboard: AffiliateDashboard = {
+      // Retornar dashboard vazio ao invés de dados mockados
+      const emptyDashboard: AffiliateDashboard = {
         overview: {
-          total_referrals: affiliate.total_referrals,
-          active_referrals: Math.floor(affiliate.total_referrals * 0.85),
-          total_commission: affiliate.total_commission,
-          pending_commission: Math.floor(affiliate.total_commission * 0.1),
-          current_level: affiliate.current_level
+          total_referrals: 0,
+          active_referrals: 0,
+          total_commission: 0,
+          pending_commission: 0,
+          current_level: 0
         },
         performance: {
           this_month: {
-            referrals: Math.floor(affiliate.total_referrals * 0.15),
-            commission: Math.floor(affiliate.total_commission * 0.15)
+            referrals: 0,
+            commission: 0
           },
           last_month: {
-            referrals: Math.floor(affiliate.total_referrals * 0.20),
-            commission: Math.floor(affiliate.total_commission * 0.20)
+            referrals: 0,
+            commission: 0
           },
-          growth_rate: -25.0
+          growth_rate: 0
         },
         network: {
-          level_1: Math.floor(affiliate.total_referrals * 0.4),
-          level_2: Math.floor(affiliate.total_referrals * 0.35),
-          level_3: Math.floor(affiliate.total_referrals * 0.25),
-          total_depth: affiliate.current_level
+          level_1: 0,
+          level_2: 0,
+          level_3: 0,
+          total_depth: 0
         },
-        recent_activity: [
-          {
-            type: 'new_referral',
-            description: 'Nova indicação: Carlos Lima',
-            date: '2025-06-24',
-            value: 50.00
-          },
-          {
-            type: 'commission_paid',
-            description: 'Comissão paga - Nível 1',
-            date: '2025-06-23',
-            value: 100.00
-          }
-        ]
+        recent_activity: []
       };
       
       return {
         success: true,
-        data: mockDashboard
+        data: emptyDashboard
       };
     }
   },
