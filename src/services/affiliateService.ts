@@ -1,7 +1,7 @@
 import axios from 'axios';
 
 // URL base da API
-const API_BASE_URL = 'https://fature-affiliate-service-production-87ff.up.railway.app';
+const API_BASE_URL = 'https://fature-affiliate-service-production.up.railway.app';
 
 // API Key para autenticação
 const API_KEY = 'fature-cpa-system-2025-secure-key';
